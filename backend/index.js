@@ -13,29 +13,32 @@ dotenv.config({});
 
 const app = express();
 
-// CORS configuration
+const allowedOrigins = [
+    "http://localhost:5173",
+    "https://hire-hub-sigma-seven.vercel.app"
+];
+
 const corsOptions = {
-    origin: [
-        "http://localhost:5173",
-        "https://hire-hub-sigma-seven.vercel.app"
-    ],
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("CORS not allowed"));
+        }
+    },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
 };
 
-// Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Root Route (Helps Render health check & manual testing)
+// Root health check endpoint
 app.get("/", (req, res) => {
-    return res.status(200).json({
-        message: "Backend is running successfully",
-        success: true
-    });
+    return res.status(200).json({ message: "Backend is active", success: true });
 });
 
 // API Routes
@@ -48,6 +51,10 @@ app.use("/api/v1/ai", aiRoute);
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, async () => {
-    await connectDB();
-    console.log(`Server running at port ${PORT}`);
+    try {
+        await connectDB();
+        console.log(`Server running successfully on port ${PORT}`);
+    } catch (error) {
+        console.error("Database connection failed:", error.message);
+    }
 });
