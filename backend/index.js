@@ -13,37 +13,41 @@ dotenv.config({});
 
 const app = express();
 
-// middleware
-app.use(express.json());
-app.use(express.urlencoded({extended:true}));
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
+// CORS configuration
 const corsOptions = {
     origin: [
         "http://localhost:5173",
         "https://hire-hub-sigma-seven.vercel.app"
     ],
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 };
 
+// Middleware
 app.use(cors(corsOptions));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-const PORT = process.env.PORT || 3000;
+// Root Route (Helps Render health check & manual testing)
+app.get("/", (req, res) => {
+    return res.status(200).json({
+        message: "Backend is running successfully",
+        success: true
+    });
+});
 
-
-// api's
+// API Routes
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/company", companyRoute);
 app.use("/api/v1/job", jobRoute);
 app.use("/api/v1/application", applicationRoute);
 app.use("/api/v1/ai", aiRoute);
 
+const PORT = process.env.PORT || 3000;
 
-
-app.listen(PORT,()=>{
-    connectDB();
+app.listen(PORT, async () => {
+    await connectDB();
     console.log(`Server running at port ${PORT}`);
-})
+});
