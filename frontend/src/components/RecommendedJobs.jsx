@@ -35,7 +35,7 @@ const RecommendedJobs = ({ embedded = false }) => {
         <section className={`${embedded ? 'mt-12' : 'max-w-4xl mx-auto my-5'} bg-white border border-gray-200 rounded-2xl p-6`}>
             <div className='flex items-center justify-between gap-4 mb-4'>
                 <div>
-                    <h1 className='font-bold text-lg'>AI Recommended Jobs</h1>
+                    <h1 className='font-bold text-lg'>Recommended Jobs</h1>
                     <p className='text-sm text-gray-500'>Matched from currently available jobs using your profile and resume.</p>
                 </div>
                 <Button variant='outline' onClick={() => loadRecommendations(true)} disabled={loading}>
