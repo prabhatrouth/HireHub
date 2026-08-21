@@ -10,6 +10,8 @@ import {
     generateInterviewPrepWithAI,
     generateJobFitAnalysisWithAI,
     generateJobDescriptionWithAI,
+    analyzeResumeWithAI,
+    optimizeResumeBulletWithAI,
 } from "../services/gemini.service.js";
 import { mockStore } from "../utils/mockStore.js";
 import mongoose from "mongoose";
@@ -22,46 +24,58 @@ export const getJobRecommendations = async (req, res) => {
     try {
         let student = null;
         let candidateJobs = [];
+        const isGuest = !req.id;
 
         if (isDbConnected()) {
-            student = await User.findById(req.id).lean();
-            if (!student) return res.status(404).json({ message: "User not found.", success: false });
-            if (student.role !== "student") {
-                return res.status(403).json({ message: "Recommendations are available to students only.", success: false });
+            if (!isGuest) {
+                student = await User.findById(req.id).lean();
+                if (student && student.role === "recruiter") {
+                    return res.status(200).json({
+                        recommendations: [],
+                        isRecruiter: true,
+                        message: "Recommendations are tailored for candidates. Visit Recruiter Hub to manage your postings.",
+                        success: true,
+                    });
+                }
             }
 
-            const applications = await Application.find({ applicant: student._id }).select("job").lean();
-            const appliedJobIds = applications.map((application) => application.job);
+            let appliedJobIds = [];
+            if (student) {
+                const applications = await Application.find({ applicant: student._id }).select("job").lean();
+                appliedJobIds = applications.map((application) => application.job);
+            }
+
             candidateJobs = await Job.find({ _id: { $nin: appliedJobIds } })
                 .populate("company", "name logo location")
                 .sort({ createdAt: -1 })
                 .limit(250)
                 .lean();
         } else {
-            student = mockStore.users.find((u) => String(u._id) === String(req.id));
-            if (!student) {
-                student = mockStore.users.find((u) => u.role === "student") || {
-                    _id: req.id,
-                    fullname: "Student User",
-                    role: "student",
-                    profile: { skills: ["React", "JavaScript", "HTML", "CSS"] },
-                };
-            }
-            if (student.role !== "student") {
-                return res.status(403).json({ message: "Recommendations are available to students only.", success: false });
+            if (!isGuest) {
+                student = mockStore.users.find((u) => String(u._id) === String(req.id));
+                if (student && student.role === "recruiter") {
+                    return res.status(200).json({
+                        recommendations: [],
+                        isRecruiter: true,
+                        message: "Recommendations are tailored for candidates. Visit Recruiter Hub to manage your postings.",
+                        success: true,
+                    });
+                }
             }
             candidateJobs = mockStore.jobs;
         }
 
         if (candidateJobs.length === 0) {
-            return res.status(200).json({ recommendations: [], success: true });
+            return res.status(200).json({ recommendations: [], success: true, isGuest });
         }
 
-        const resumeText = await getResumeText(student.profile?.resume);
+        const resumeText = student ? await getResumeText(student.profile?.resume) : "";
         const profile = {
-            fullname: student.fullname,
-            bio: student.profile?.bio || "",
-            skills: student.profile?.skills || [],
+            fullname: student?.fullname || "Candidate",
+            bio: student?.profile?.bio || "Software Engineer looking for opportunities in technology.",
+            skills: (student?.profile?.skills && student.profile.skills.length > 0)
+                ? student.profile.skills
+                : ["React", "JavaScript", "Node.js", "TypeScript", "Python", "SQL", "Git"],
             resumeText,
         };
 
@@ -76,7 +90,7 @@ export const getJobRecommendations = async (req, res) => {
         const seenJobIds = new Set();
         const recommendations = aiRecommendations
             .filter((item) => jobsById.has(item.jobId) && !seenJobIds.has(item.jobId) && seenJobIds.add(item.jobId))
-            .slice(0, 10)
+            .slice(0, 12)
             .map((item) => ({
                 jobId: item.jobId,
                 job: jobsById.get(item.jobId),
@@ -86,7 +100,12 @@ export const getJobRecommendations = async (req, res) => {
                 missingSkills: item.missingSkills || [],
             }));
 
-        return res.status(200).json({ recommendations, success: true });
+        return res.status(200).json({
+            recommendations,
+            success: true,
+            isGuest,
+            candidateSkills: profile.skills,
+        });
     } catch (error) {
         console.error("AI job recommendations failed:", error.message);
         return res.status(200).json({
@@ -330,4 +349,61 @@ export const generateJobDescription = async (req, res) => {
         return res.status(500).json({ message: "Failed to generate job description", success: false });
     }
 };
+
+// 7. Student AI Resume Checker & ATS Analyzer
+export const analyzeResume = async (req, res) => {
+    try {
+        const { resumeText, targetRole, skills, bio } = req.body;
+        let student = null;
+
+        if (req.id) {
+            if (isDbConnected()) {
+                student = await User.findById(req.id).lean();
+            } else {
+                student = mockStore.users.find((u) => String(u._id) === String(req.id));
+            }
+        }
+
+        const profile = {
+            fullname: student?.fullname || req.body.fullname || "Student Candidate",
+            bio: student?.profile?.bio || bio || "",
+            skills: student?.profile?.skills || skills || [],
+        };
+
+        let content = resumeText || "";
+        // If student has a resume URL and resumeText wasn't passed directly
+        if (!content && student?.profile?.resume) {
+            content = await getResumeText(student.profile.resume);
+        }
+
+        const analysis = await analyzeResumeWithAI({
+            resumeText: content,
+            targetRole,
+            profile,
+        });
+
+        return res.status(200).json({ analysis, success: true });
+    } catch (error) {
+        console.error("Resume analysis error:", error);
+        return res.status(500).json({ message: "Failed to analyze resume", success: false });
+    }
+};
+
+// 8. Instant AI Resume Bullet Enhancer
+export const optimizeResumeBullet = async (req, res) => {
+    try {
+        const { bulletText, targetRole } = req.body;
+
+        if (!bulletText || !bulletText.trim()) {
+            return res.status(400).json({ message: "Bullet point text is required", success: false });
+        }
+
+        const result = await optimizeResumeBulletWithAI({ bulletText, targetRole });
+        return res.status(200).json({ result, success: true });
+    } catch (error) {
+        console.error("Bullet optimization error:", error);
+        return res.status(500).json({ message: "Failed to optimize resume bullet", success: false });
+    }
+};
+
 

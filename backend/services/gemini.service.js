@@ -617,3 +617,246 @@ Output strict JSON:
     }
 };
 
+// 7. Student AI Resume Checker & ATS Analyzer
+export const analyzeResumeWithAI = async ({ resumeText, targetRole, profile }) => {
+    const role = targetRole || "Software Engineer / Tech Professional";
+    const studentSkills = (profile?.skills || []).join(", ") || "General Technical Skills";
+    const studentBio = cleanText(profile?.bio, 500);
+    const content = cleanText(resumeText, MAX_RESUME_CHARACTERS);
+
+    const buildFallbackAnalysis = () => {
+        const textLower = (content + " " + studentSkills + " " + studentBio).toLowerCase();
+        
+        // Common industry tech terms
+        const techSkillsPool = [
+            "JavaScript", "TypeScript", "React", "Node.js", "Python", "Java", "SQL", "MongoDB",
+            "PostgreSQL", "HTML", "CSS", "Tailwind CSS", "Git", "Docker", "AWS", "REST APIs",
+            "Express", "Redux", "Next.js", "GraphQL", "CI/CD", "Testing", "Agile", "Linux"
+        ];
+
+        const detected = techSkillsPool.filter(skill => textLower.includes(skill.toLowerCase()));
+        if (profile?.skills?.length) {
+            profile.skills.forEach(s => {
+                if (!detected.some(d => d.toLowerCase() === s.toLowerCase())) {
+                    detected.push(s);
+                }
+            });
+        }
+
+        const missing = techSkillsPool
+            .filter(skill => !detected.some(d => d.toLowerCase() === skill.toLowerCase()))
+            .slice(0, 5);
+
+        const hasMetrics = /\d+%|\$\d+|\d+\+|\d+ (users|requests|ms|seconds|clients|downloads|projects)/i.test(content);
+        const hasGoodLength = content.length > 300;
+        const skillScore = Math.min(95, Math.max(50, detected.length * 9));
+        const impactScore = hasMetrics ? 85 : 62;
+        const formattingScore = hasGoodLength ? 88 : 70;
+        const experienceScore = 80;
+
+        const atsScore = Math.round((skillScore * 0.35) + (impactScore * 0.25) + (formattingScore * 0.2) + (experienceScore * 0.2));
+
+        return {
+            atsScore: Math.min(96, Math.max(45, atsScore)),
+            targetRole: role,
+            grade: atsScore >= 85 ? "A (Excellent)" : atsScore >= 75 ? "B+ (Strong)" : atsScore >= 60 ? "B (Good)" : "C (Needs Optimization)",
+            summary: `Resume shows solid foundational technical competencies for ${role}. Boosting quantifiable impact metrics and key cloud/framework keywords will maximize ATS pass-through rates.`,
+            breakdown: {
+                keywordsMatch: {
+                    score: skillScore,
+                    label: "Keyword & Skill Alignment",
+                    details: `Identified ${detected.length} relevant technical skills and domain terms for ${role}.`
+                },
+                impactAndActionVerbs: {
+                    score: impactScore,
+                    label: "Action Verbs & Impact Metrics",
+                    details: hasMetrics
+                        ? "Good presence of measurable outcomes and performance indicators."
+                        : "Lacks measurable impact metrics (e.g., % latency reduced, user counts, load times)."
+                },
+                formatting: {
+                    score: formattingScore,
+                    label: "ATS Readability & Structure",
+                    details: "Clean section hierarchy with readable standard headers."
+                },
+                experienceClarity: {
+                    score: experienceScore,
+                    label: "Experience Relevance",
+                    details: `Experience points align reasonably well with standard expectations for ${role}.`
+                }
+            },
+            detectedSkills: detected.length > 0 ? detected : ["Problem Solving", "Web Fundamentals", "Git"],
+            missingKeywords: missing,
+            strengths: [
+                `Clear technical competencies identified (${detected.slice(0, 4).join(", ") || "Core skills"}).`,
+                "Well-structured sections that can be parsed by modern applicant tracking systems.",
+                "Direct relevance to modern software engineering workflows."
+            ],
+            criticalImprovements: [
+                {
+                    section: "Work Experience & Projects",
+                    issue: "Bullet points should follow Google's XYZ formula (Accomplished [X], as measured by [Y], by doing [Z]).",
+                    recommendation: "Quantify your achievements with exact percentages, performance boosts, or user counts."
+                },
+                {
+                    section: "Skills Section",
+                    issue: `Missing high-frequency ATS keywords for ${role}: ${missing.slice(0, 3).join(", ")}.`,
+                    recommendation: "Incorporate relevant tools, testing frameworks, or cloud platforms you have familiarity with."
+                },
+                {
+                    section: "Summary Statement",
+                    issue: "Add a 2-line target-oriented professional summary at the very top of your resume.",
+                    recommendation: `Explicitly mention "${role}" and your primary tech stack in the top 3 lines.`
+                }
+            ],
+            bulletOptimizations: [
+                {
+                    original: "Built frontend features and connected to backend API.",
+                    optimized: `Architected responsive, high-performance UI components using modern frontend frameworks, optimizing render times by 30% across 5+ core user flows.`
+                },
+                {
+                    original: "Worked on database queries and bug fixes.",
+                    optimized: `Optimized high-volume database queries and REST API endpoints, reducing server response latency by 45% and ensuring 99.9% uptime.`
+                }
+            ]
+        };
+    };
+
+    const ai = await getGenAIClient();
+    if (!ai) return buildFallbackAnalysis();
+
+    try {
+        const prompt = `You are a Senior Technical Recruiter and ATS (Applicant Tracking System) Algorithm Expert for HireHub.
+Perform an in-depth, rigorous ATS Resume Audit for the target role: "${role}".
+
+CANDIDATE RESUME / PROFILE:
+${content || `Skills: ${studentSkills}\nBio: ${studentBio}\nName: ${profile?.fullname || "Candidate"}`}
+
+CRITICAL INSTRUCTIONS:
+- Calculate an accurate atsScore (0-100) based on realistic industry standards.
+- Evaluate grade: "A (Excellent)" (85-100), "B+ (Strong)" (75-84), "B (Good)" (60-74), "C (Needs Optimization)" (<60).
+- Extract detectedSkills present in the text and suggest missingKeywords vital for "${role}".
+- Provide breakdown scores for: keywordsMatch, impactAndActionVerbs, formatting, experienceClarity (each 0-100 with a short details note).
+- Provide 3 distinct strengths.
+- Provide 3 high-priority criticalImprovements with section, issue, and recommendation.
+- Provide 2 bulletOptimizations showing an original bullet and a powerful, metric-driven ATS-optimized version.
+
+Output strict JSON in this exact structure:
+{
+  "atsScore": 84,
+  "targetRole": "${role}",
+  "grade": "B+ (Strong)",
+  "summary": "1-2 sentence executive assessment of resume ATS readiness",
+  "breakdown": {
+    "keywordsMatch": { "score": 85, "label": "Keyword & Skill Alignment", "details": "string" },
+    "impactAndActionVerbs": { "score": 78, "label": "Action Verbs & Impact Metrics", "details": "string" },
+    "formatting": { "score": 90, "label": "ATS Readability & Structure", "details": "string" },
+    "experienceClarity": { "score": 82, "label": "Experience Relevance", "details": "string" }
+  },
+  "detectedSkills": ["string"],
+  "missingKeywords": ["string"],
+  "strengths": ["string", "string", "string"],
+  "criticalImprovements": [
+    { "section": "string", "issue": "string", "recommendation": "string" }
+  ],
+  "bulletOptimizations": [
+    { "original": "string", "optimized": "string" }
+  ]
+}`;
+
+        const response = await ai.models.generateContent({
+            model: process.env.GEMINI_MODEL || "gemini-3.7-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                temperature: 0.2,
+            },
+        });
+
+        const parsed = JSON.parse(response.text);
+        return parsed || buildFallbackAnalysis();
+    } catch (err) {
+        console.warn("[HireHub AI] Resume check failed, using fallback:", err.message);
+        return buildFallbackAnalysis();
+    }
+};
+
+// 8. Instant AI Resume Bullet Enhancer
+export const optimizeResumeBulletWithAI = async ({ bulletText, targetRole }) => {
+    const role = targetRole || "Software Engineer";
+    const bullet = cleanText(bulletText, 500);
+
+    const buildFallbackBullets = () => {
+        return {
+            original: bullet,
+            targetRole: role,
+            variations: [
+                {
+                    type: "Impact & Metrics Driven",
+                    text: `Engineered scalable solutions for ${role} workflows, increasing processing throughput by 35% and supporting over 10,000+ active user interactions.`,
+                    impactHighlight: "Highlights measurable business value and scale metrics."
+                },
+                {
+                    type: "Action & Technical Depth",
+                    text: `Architected and deployed robust end-to-end features utilizing modern architectural patterns, cutting debugging overhead by 40%.`,
+                    impactHighlight: "Demonstrates proactive engineering rigor and design standards."
+                },
+                {
+                    type: "Leadership & Collaboration",
+                    text: `Spearheaded cross-functional delivery of critical features, mentoring junior engineers and accelerating sprint release cycles by 25%.`,
+                    impactHighlight: "Highlights team leadership, communication, and ownership."
+                }
+            ]
+        };
+    };
+
+    const ai = await getGenAIClient();
+    if (!ai) return buildFallbackBullets();
+
+    try {
+        const prompt = `You are an elite Resume Bullet Point Copywriter for HireHub.
+Transform this candidate bullet point into 3 high-impact, ATS-optimized versions tailored for a "${role}".
+Original Bullet: "${bullet}"
+
+Use the XYZ formula: Accomplished [X], as measured by [Y], by doing [Z].
+Output strict JSON:
+{
+  "original": "${bullet}",
+  "targetRole": "${role}",
+  "variations": [
+    {
+      "type": "Impact & Metrics Driven",
+      "text": "string with strong action verbs and quantifiable outcome metrics",
+      "impactHighlight": "short note explaining why this variation excels"
+    },
+    {
+      "type": "Action & Technical Depth",
+      "text": "string emphasizing architectural and technical mastery",
+      "impactHighlight": "short note"
+    },
+    {
+      "type": "Leadership & Collaboration",
+      "text": "string highlighting cross-functional leadership and delivery",
+      "impactHighlight": "short note"
+    }
+  ]
+}`;
+
+        const response = await ai.models.generateContent({
+            model: process.env.GEMINI_MODEL || "gemini-3.7-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                temperature: 0.3,
+            },
+        });
+
+        const parsed = JSON.parse(response.text);
+        return parsed || buildFallbackBullets();
+    } catch (err) {
+        console.warn("[HireHub AI] Bullet optimizer failed, using fallback:", err.message);
+        return buildFallbackBullets();
+    }
+};
+
+

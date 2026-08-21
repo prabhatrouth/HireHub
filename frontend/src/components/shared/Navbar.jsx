@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { LogOut, User2, Menu, X, Sparkles, Briefcase, Building2, Compass, Home as HomeIcon, PlusCircle } from 'lucide-react';
+import { LogOut, User2, Menu, X, Sparkles, Briefcase, Building2, Compass, Home as HomeIcon, PlusCircle, FileCheck2 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import axios from 'axios';
@@ -59,10 +59,21 @@ const Navbar = () => {
                     </div>
 
                     {/* Desktop Navigation Links */}
-                    <nav className="hidden md:flex items-center gap-8">
-                        <ul className="flex items-center gap-6 text-sm font-medium text-gray-600">
+                    <nav className="hidden md:flex items-center gap-6">
+                        <ul className="flex items-center gap-5 text-xs sm:text-sm font-medium text-gray-600">
                             {user && user.role === 'recruiter' ? (
                                 <>
+                                    <li>
+                                        <Link
+                                            to="/admin/portal"
+                                            className={`transition-colors hover:text-[#6A38C2] flex items-center gap-1.5 ${
+                                                isActive('/admin/portal') ? 'text-[#6A38C2] font-bold' : ''
+                                            }`}
+                                        >
+                                            <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
+                                            Recruiter Hub
+                                        </Link>
+                                    </li>
                                     <li>
                                         <Link
                                             to="/admin/companies"
@@ -70,7 +81,7 @@ const Navbar = () => {
                                                 isActive('/admin/companies') ? 'text-[#6A38C2] font-semibold' : ''
                                             }`}
                                         >
-                                            <Building2 className="w-4 h-4" />
+                                            <Building2 className="w-3.5 h-3.5" />
                                             Companies
                                         </Link>
                                     </li>
@@ -81,17 +92,17 @@ const Navbar = () => {
                                                 isActive('/admin/jobs') ? 'text-[#6A38C2] font-semibold' : ''
                                             }`}
                                         >
-                                            <Briefcase className="w-4 h-4" />
+                                            <Briefcase className="w-3.5 h-3.5" />
                                             Jobs & Applicants
                                         </Link>
                                     </li>
                                     <li>
                                         <Link
                                             to="/admin/jobs/create"
-                                            className="text-xs bg-purple-50 text-[#6A38C2] font-semibold px-2.5 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-100 flex items-center gap-1"
+                                            className="text-xs bg-[#6A38C2] text-white font-semibold px-3 py-1.5 rounded-xl hover:bg-[#582da5] flex items-center gap-1 shadow-xs"
                                         >
                                             <PlusCircle className="w-3.5 h-3.5" />
-                                            Post New Job
+                                            Post Job
                                         </Link>
                                     </li>
                                 </>
@@ -119,12 +130,35 @@ const Navbar = () => {
                                     </li>
                                     <li>
                                         <Link
-                                            to="/browse"
-                                            className={`transition-colors hover:text-[#6A38C2] ${
-                                                isActive('/browse') ? 'text-[#6A38C2] font-semibold' : ''
+                                            to="/recommended"
+                                            className={`transition-colors hover:text-[#6A38C2] flex items-center gap-1 ${
+                                                isActive('/recommended') ? 'text-[#6A38C2] font-bold' : ''
                                             }`}
                                         >
-                                            Browse
+                                            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                                            AI Matches
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link
+                                            to="/resume-checker"
+                                            className={`transition-colors hover:text-[#6A38C2] flex items-center gap-1 ${
+                                                isActive('/resume-checker') ? 'text-[#6A38C2] font-bold' : ''
+                                            }`}
+                                        >
+                                            <span className="relative flex h-2 w-2 mr-0.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#6A38C2]"></span>
+                                            </span>
+                                            Resume Checker
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link
+                                            to="/student/portal"
+                                            className="text-xs bg-purple-50 text-[#6A38C2] font-bold px-2.5 py-1.5 rounded-lg border border-purple-200 hover:bg-purple-100 flex items-center gap-1"
+                                        >
+                                            Student Hub
                                         </Link>
                                     </li>
                                 </>
@@ -182,14 +216,38 @@ const Navbar = () => {
                                         </div>
 
                                         <div className="mt-3 space-y-1">
-                                            {user.role === 'student' && (
+                                            {user.role === 'recruiter' ? (
                                                 <Link
-                                                    to="/profile"
+                                                    to="/admin/portal"
                                                     className="flex items-center gap-2.5 px-2 py-2 text-xs font-medium text-gray-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-lg transition-colors"
                                                 >
-                                                    <User2 className="w-4 h-4 text-gray-500" />
-                                                    <span>View & Edit Profile</span>
+                                                    <Sparkles className="w-4 h-4 text-purple-600" />
+                                                    <span>Recruiter Command Hub</span>
                                                 </Link>
+                                            ) : (
+                                                <>
+                                                    <Link
+                                                        to="/student/portal"
+                                                        className="flex items-center gap-2.5 px-2 py-2 text-xs font-medium text-gray-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-lg transition-colors"
+                                                    >
+                                                        <Sparkles className="w-4 h-4 text-purple-600" />
+                                                        <span>Student Career Hub</span>
+                                                    </Link>
+                                                    <Link
+                                                        to="/resume-checker"
+                                                        className="flex items-center gap-2.5 px-2 py-2 text-xs font-medium text-gray-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-lg transition-colors"
+                                                    >
+                                                        <FileCheck2 className="w-4 h-4 text-purple-600" />
+                                                        <span>ATS Resume Checker</span>
+                                                    </Link>
+                                                    <Link
+                                                        to="/profile"
+                                                        className="flex items-center gap-2.5 px-2 py-2 text-xs font-medium text-gray-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-lg transition-colors"
+                                                    >
+                                                        <User2 className="w-4 h-4 text-gray-500" />
+                                                        <span>View & Edit Profile</span>
+                                                    </Link>
+                                                </>
                                             )}
 
                                             <button
@@ -235,6 +293,16 @@ const Navbar = () => {
                     <div className="space-y-1">
                         {user && user.role === 'recruiter' ? (
                             <>
+                                <Link
+                                    to="/admin/portal"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium ${
+                                        isActive('/admin/portal') ? 'bg-purple-50 text-[#6A38C2] font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <Sparkles className="w-4 h-4 text-[#6A38C2]" />
+                                    <span>Recruiter Command Hub</span>
+                                </Link>
                                 <Link
                                     to="/admin/companies"
                                     onClick={() => setMobileMenuOpen(false)}
@@ -285,6 +353,36 @@ const Navbar = () => {
                                 >
                                     <Briefcase className="w-4 h-4" />
                                     <span>Explore Jobs</span>
+                                </Link>
+                                <Link
+                                    to="/recommended"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium ${
+                                        isActive('/recommended') ? 'bg-purple-50 text-[#6A38C2] font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <Sparkles className="w-4 h-4 text-purple-600" />
+                                    <span>AI Job Matches</span>
+                                </Link>
+                                <Link
+                                    to="/resume-checker"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium ${
+                                        isActive('/resume-checker') ? 'bg-purple-50 text-[#6A38C2] font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <FileCheck2 className="w-4 h-4 text-purple-600" />
+                                    <span>ATS Resume Checker</span>
+                                </Link>
+                                <Link
+                                    to="/student/portal"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium ${
+                                        isActive('/student/portal') ? 'bg-purple-50 text-[#6A38C2] font-bold' : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <Sparkles className="w-4 h-4 text-purple-600" />
+                                    <span>Student Career Hub</span>
                                 </Link>
                                 <Link
                                     to="/browse"
