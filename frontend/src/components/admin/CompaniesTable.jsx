@@ -14,7 +14,7 @@ const CompaniesTable = () => {
         const filteredCompany = companies.length >= 0 && companies.filter((company)=>{
             if(!searchCompanyByText){
                 return true
-            };
+            }
             return company?.name?.toLowerCase().includes(searchCompanyByText.toLowerCase());
 
         });
@@ -35,14 +35,14 @@ const CompaniesTable = () => {
                 <TableBody>
                     {
                         filterCompany?.map((company) => (
-                            <tr>
+                            <TableRow key={company._id}>
                                 <TableCell>
                                     <Avatar>
                                         <AvatarImage src={company.logo}/>
                                     </Avatar>
                                 </TableCell>
                                 <TableCell>{company.name}</TableCell>
-                                <TableCell>{company.createdAt.split("T")[0]}</TableCell>
+                                <TableCell>{company.createdAt?.split("T")[0] || ""}</TableCell>
                                 <TableCell className="text-right cursor-pointer">
                                     <Popover>
                                         <PopoverTrigger><MoreHorizontal /></PopoverTrigger>
@@ -54,7 +54,7 @@ const CompaniesTable = () => {
                                         </PopoverContent>
                                     </Popover>
                                 </TableCell>
-                            </tr>
+                            </TableRow>
 
                         ))
                     }

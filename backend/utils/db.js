@@ -2,10 +2,19 @@ import mongoose from "mongoose";
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGO_URI);
-        console.log('mongodb connected successfully');
+        mongoose.set("bufferCommands", false);
+        const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+        if (!uri) {
+            console.warn("[HireHub] MONGO_URI not provided. Running in-memory / fallback mode.");
+            return;
+        }
+        await mongoose.connect(uri, {
+            serverSelectionTimeoutMS: 5000,
+        });
+        console.log("MongoDB connected successfully");
     } catch (error) {
-        console.log(error);
+        console.warn("MongoDB connection failed:", error.message);
     }
-}
+};
+
 export default connectDB;

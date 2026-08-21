@@ -9,8 +9,8 @@ const __dirname = path.dirname(__filename);
 export default {
   darkMode: ["class"],
   content: [
-    path.resolve(__dirname, "./src/**/*.{js,jsx,ts,tsx}"),
-    path.resolve(__dirname, "./index.html"),
+    path.resolve(__dirname, "./frontend/src/**/*.{js,jsx,ts,tsx}"),
+    path.resolve(__dirname, "./frontend/index.html"),
     "./frontend/src/**/*.{js,jsx,ts,tsx}",
     "./frontend/index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
