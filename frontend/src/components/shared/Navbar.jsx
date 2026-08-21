@@ -21,14 +21,18 @@ const Navbar = () => {
         try {
             axios.defaults.withCredentials = true;
             const res = await axios.get(`${USER_API_END_POINT}/logout`, { withCredentials: true });
+            localStorage.removeItem('token');
             if (res.data?.success) {
                 dispatch(setUser(null));
                 navigate('/');
                 toast.success(res.data.message || 'Logged out successfully');
             }
         } catch (error) {
+            localStorage.removeItem('token');
+            dispatch(setUser(null));
+            navigate('/');
             console.error(error);
-            toast.error(error.response?.data?.message || 'Logout failed');
+            toast.error(error.response?.data?.message || 'Logged out');
         }
     };
 

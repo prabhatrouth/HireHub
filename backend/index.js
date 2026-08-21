@@ -20,20 +20,20 @@ const frontendDir = path.resolve(__dirname, "../frontend");
 
 const app = express();
 
-// CORS Configuration - Permissive for dev server and preview iframes
-app.use(
-    cors({
-        origin: (origin, callback) => {
-            // Allow all origins in development and iframe previews
-            callback(null, true);
-        },
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    })
-);
+// CORS Configuration - Fully supports separate Vercel frontend and Render backend
+const corsOptions = {
+    origin: (origin, callback) => {
+        // Allow all origins (local dev, preview iframes, Vercel deployments, custom domains)
+        callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    exposedHeaders: ["Set-Cookie"],
+};
 
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Body parsers & cookie parser
 app.use(express.json());
@@ -125,7 +125,7 @@ async function startServer() {
         }
     }
 
-    const PORT = 3000;
+    const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
         console.log(`HireHub server listening on http://0.0.0.0:${PORT}`);
         connectDB().catch((err) => {

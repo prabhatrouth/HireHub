@@ -7,6 +7,17 @@ import { Provider } from 'react-redux'
 import store from './redux/store.js'
 import { persistStore } from 'redux-persist'
 import { PersistGate } from 'redux-persist/integration/react'
+import axios from 'axios'
+
+// Setup global axios defaults for cross-origin deployments (Vercel <-> Render)
+axios.defaults.withCredentials = true;
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 const persistor = persistStore(store);
 
