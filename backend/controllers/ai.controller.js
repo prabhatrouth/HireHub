@@ -1,12 +1,22 @@
 import { Application } from "../models/application.model.js";
 import { Job } from "../models/job.model.js";
 import { User } from "../models/user.model.js";
-import { buildCandidateScore, getResumeText, rankJobsWithAI, evaluateApplicantsWithAI } from "../services/gemini.service.js";
+import {
+    buildCandidateScore,
+    getResumeText,
+    rankJobsWithAI,
+    evaluateApplicantsWithAI,
+    generateCoverLetterWithAI,
+    generateInterviewPrepWithAI,
+    generateJobFitAnalysisWithAI,
+    generateJobDescriptionWithAI,
+} from "../services/gemini.service.js";
 import { mockStore } from "../utils/mockStore.js";
 import mongoose from "mongoose";
 
 const CANDIDATE_LIMIT = 50;
 const isDbConnected = () => mongoose.connection.readyState === 1;
+
 
 export const getJobRecommendations = async (req, res) => {
     try {
@@ -171,3 +181,153 @@ export const getApplicantsAIEvaluation = async (req, res) => {
         });
     }
 };
+
+// 3. AI Cover Letter Generation
+export const generateCoverLetter = async (req, res) => {
+    try {
+        const { jobId, customNote } = req.body;
+        let student = null;
+        let job = null;
+
+        if (isDbConnected()) {
+            student = await User.findById(req.id).lean();
+            if (jobId) {
+                job = await Job.findById(jobId).populate("company").lean();
+            }
+        } else {
+            student = mockStore.users.find((u) => String(u._id) === String(req.id));
+            if (jobId) {
+                job = mockStore.jobs.find((j) => String(j._id) === String(jobId));
+            }
+        }
+
+        if (!student) {
+            student = {
+                fullname: req.body.fullname || "Applicant",
+                profile: {
+                    skills: req.body.skills || ["Software Engineering"],
+                    bio: req.body.bio || "",
+                },
+            };
+        }
+
+        if (!job && req.body.job) {
+            job = req.body.job;
+        }
+
+        if (!job) {
+            return res.status(400).json({ message: "Job information required for cover letter.", success: false });
+        }
+
+        const profile = {
+            fullname: student.fullname,
+            bio: student.profile?.bio || "",
+            skills: student.profile?.skills || [],
+        };
+
+        const coverLetter = await generateCoverLetterWithAI({ profile, job, customNote });
+        return res.status(200).json({ coverLetter, success: true });
+    } catch (error) {
+        console.error("Generate cover letter error:", error);
+        return res.status(500).json({ message: "Failed to generate cover letter", success: false });
+    }
+};
+
+// 4. AI Interview Preparation Guide
+export const getInterviewPrep = async (req, res) => {
+    try {
+        const { jobId } = req.body;
+        let student = null;
+        let job = null;
+
+        if (isDbConnected()) {
+            if (req.id) student = await User.findById(req.id).lean();
+            if (jobId) job = await Job.findById(jobId).populate("company").lean();
+        } else {
+            if (req.id) student = mockStore.users.find((u) => String(u._id) === String(req.id));
+            if (jobId) job = mockStore.jobs.find((j) => String(j._id) === String(jobId));
+        }
+
+        if (!job && req.body.job) {
+            job = req.body.job;
+        }
+
+        if (!job) {
+            return res.status(400).json({ message: "Job data is required for interview prep.", success: false });
+        }
+
+        const profile = {
+            fullname: student?.fullname || "Candidate",
+            skills: student?.profile?.skills || [],
+        };
+
+        const interviewPrep = await generateInterviewPrepWithAI({ job, profile });
+        return res.status(200).json({ interviewPrep, success: true });
+    } catch (error) {
+        console.error("Interview prep error:", error);
+        return res.status(500).json({ message: "Failed to generate interview prep guide", success: false });
+    }
+};
+
+// 5. AI Candidate-to-Job Career & Skill Compatibility
+export const getCareerFitAnalysis = async (req, res) => {
+    try {
+        const { jobId } = req.body;
+        let student = null;
+        let job = null;
+
+        if (isDbConnected()) {
+            if (req.id) student = await User.findById(req.id).lean();
+            if (jobId) job = await Job.findById(jobId).populate("company").lean();
+        } else {
+            if (req.id) student = mockStore.users.find((u) => String(u._id) === String(req.id));
+            if (jobId) job = mockStore.jobs.find((j) => String(j._id) === String(jobId));
+        }
+
+        if (!job && req.body.job) {
+            job = req.body.job;
+        }
+
+        if (!job) {
+            return res.status(400).json({ message: "Job information required.", success: false });
+        }
+
+        const profile = {
+            fullname: student?.fullname || req.body.profile?.fullname || "Candidate",
+            bio: student?.profile?.bio || req.body.profile?.bio || "",
+            skills: student?.profile?.skills || req.body.profile?.skills || [],
+        };
+
+        const fitAnalysis = await generateJobFitAnalysisWithAI({ job, profile });
+        return res.status(200).json({ fitAnalysis, success: true });
+    } catch (error) {
+        console.error("Career fit analysis error:", error);
+        return res.status(500).json({ message: "Failed to generate career fit analysis", success: false });
+    }
+};
+
+// 6. Recruiter AI Job Description Generator
+export const generateJobDescription = async (req, res) => {
+    try {
+        const { title, companyName, location, jobType, experience, skills } = req.body;
+
+        if (!title) {
+            return res.status(400).json({ message: "Job title is required to generate description.", success: false });
+        }
+
+        const generatedData = await generateJobDescriptionWithAI({
+            title,
+            companyName,
+            location,
+            jobType,
+            experience,
+            skills,
+        });
+
+        return res.status(200).json({ data: generatedData, success: true });
+    } catch (error) {
+        console.error("Generate job description error:", error);
+        return res.status(500).json({ message: "Failed to generate job description", success: false });
+    }
+};
+

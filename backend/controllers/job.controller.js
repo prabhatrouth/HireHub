@@ -133,50 +133,50 @@ export const getAllJobs = async (req, res) => {
     }
 };
 
-// student
+// student & public job details
 export const getJobById = async (req, res) => {
     try {
         const jobId = req.params.id;
 
         if (isDbConnected()) {
-            let job = await Job.findById(jobId)
-                .populate({ path: "applications" })
-                .populate({ path: "company" });
+            try {
+                let job = await Job.findById(jobId)
+                    .populate({ path: "applications" })
+                    .populate({ path: "company" });
 
-            if (!job) {
-                return res.status(404).json({
-                    message: "Job not found.",
-                    success: false,
-                });
+                if (job) {
+                    return res.status(200).json({ job, success: true });
+                }
+            } catch {
+                // If invalid ObjectId or query fails, try mock fallback below
             }
-            return res.status(200).json({ job, success: true });
-        } else {
-            const job = mockStore.jobs.find((j) => String(j._id) === String(jobId));
-            if (!job) {
-                return res.status(404).json({
-                    message: "Job not found.",
-                    success: false,
-                });
-            }
-
-            let companyObj = job.company;
-            if (typeof companyObj === "string") {
-                const foundComp = mockStore.companies.find(
-                    (c) => String(c._id) === String(companyObj) || c.name.toLowerCase() === companyObj.toLowerCase()
-                );
-                companyObj = foundComp || { _id: companyObj, name: companyObj };
-            } else if (companyObj && !companyObj.name && companyObj._id) {
-                const foundComp = mockStore.companies.find((c) => String(c._id) === String(companyObj._id));
-                if (foundComp) companyObj = foundComp;
-            }
-
-            const completeJob = {
-                ...job,
-                company: companyObj,
-            };
-
-            return res.status(200).json({ job: completeJob, success: true });
         }
+
+        const job = mockStore.jobs.find((j) => String(j._id) === String(jobId));
+        if (!job) {
+            return res.status(404).json({
+                message: "Job not found.",
+                success: false,
+            });
+        }
+
+        let companyObj = job.company;
+        if (typeof companyObj === "string") {
+            const foundComp = mockStore.companies.find(
+                (c) => String(c._id) === String(companyObj) || c.name.toLowerCase() === companyObj.toLowerCase()
+            );
+            companyObj = foundComp || { _id: companyObj, name: companyObj };
+        } else if (companyObj && !companyObj.name && companyObj._id) {
+            const foundComp = mockStore.companies.find((c) => String(c._id) === String(companyObj._id));
+            if (foundComp) companyObj = foundComp;
+        }
+
+        const completeJob = {
+            ...job,
+            company: companyObj,
+        };
+
+        return res.status(200).json({ job: completeJob, success: true });
     } catch (error) {
         console.error("Get Job By Id Error:", error);
         return res.status(404).json({

@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-const isAuthenticated = async (req, res, next) => {
+export const isAuthenticated = async (req, res, next) => {
     try {
         const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
         if (!token) {
@@ -28,4 +28,21 @@ const isAuthenticated = async (req, res, next) => {
     }
 };
 
+export const optionalAuth = async (req, res, next) => {
+    try {
+        const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
+        if (token) {
+            const secretKey = process.env.SECRET_KEY || "hirehub_default_secret_jwt_key_2026";
+            const decode = jwt.verify(token, secretKey);
+            if (decode) {
+                req.id = decode.userId;
+            }
+        }
+    } catch {
+        // Continue even if token is invalid or expired
+    }
+    next();
+};
+
 export default isAuthenticated;
+

@@ -6,10 +6,10 @@ import { Button } from '../ui/button';
 import { useSelector } from 'react-redux';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import axios from 'axios';
-import { JOB_API_END_POINT } from '@/utils/constant';
+import { JOB_API_END_POINT, AI_API_END_POINT } from '@/utils/constant';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Briefcase, Sparkles, Building2, ArrowLeft } from 'lucide-react';
+import { Loader2, Briefcase, Sparkles, Building2, ArrowLeft, Wand2 } from 'lucide-react';
 
 const PostJob = () => {
     const [input, setInput] = useState({
@@ -25,6 +25,7 @@ const PostJob = () => {
     });
 
     const [loading, setLoading] = useState(false);
+    const [aiGenerating, setAiGenerating] = useState(false);
     const navigate = useNavigate();
     const { companies } = useSelector(store => store.company);
 
@@ -37,6 +38,52 @@ const PostJob = () => {
             ...input,
             companyId: companyId
         });
+    };
+
+    // AI Job Auto-Complete & Enhancer
+    const handleAiGenerate = async () => {
+        if (!input.title.trim()) {
+            toast.error("Please enter a Job Title first so AI can generate the job specifications.");
+            return;
+        }
+
+        const selectedCompany = companies?.find(c => String(c._id) === String(input.companyId));
+
+        setAiGenerating(true);
+        try {
+            axios.defaults.withCredentials = true;
+            const res = await axios.post(
+                `${AI_API_END_POINT}/generate-job-description`,
+                {
+                    title: input.title,
+                    companyName: selectedCompany?.name || "",
+                    location: input.location || "",
+                    jobType: input.jobType || "Full-time",
+                    experience: input.experience || "",
+                    skills: input.requirements || "",
+                },
+                { withCredentials: true }
+            );
+
+            if (res.data?.success && res.data?.data) {
+                const aiData = res.data.data;
+                setInput(prev => ({
+                    ...prev,
+                    title: aiData.title || prev.title,
+                    description: aiData.description || prev.description,
+                    requirements: Array.isArray(aiData.requirements)
+                        ? aiData.requirements.join(", ")
+                        : (aiData.requirements || prev.requirements),
+                    experience: aiData.experienceLevel || prev.experience || "2-4 years",
+                }));
+                toast.success("AI successfully drafted job description and requirements!");
+            }
+        } catch (error) {
+            console.error("AI job generation error:", error);
+            toast.error(error.response?.data?.message || "Failed to generate job description with AI");
+        } finally {
+            setAiGenerating(false);
+        }
     };
 
     const submitHandler = async (e) => {
@@ -99,6 +146,20 @@ const PostJob = () => {
                             </p>
                         </div>
                     </div>
+
+                    <Button
+                        type="button"
+                        onClick={handleAiGenerate}
+                        disabled={aiGenerating}
+                        className="bg-purple-50 hover:bg-purple-100 text-[#6A38C2] border border-purple-200 text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+                    >
+                        {aiGenerating ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                            <Wand2 className="w-3.5 h-3.5 text-[#6A38C2]" />
+                        )}
+                        {aiGenerating ? 'Writing with AI...' : 'Auto-Draft with AI'}
+                    </Button>
                 </div>
 
                 {/* Form Card */}
@@ -113,7 +174,7 @@ const PostJob = () => {
                                     name="title"
                                     value={input.title}
                                     onChange={changeEventHandler}
-                                    placeholder="e.g. Senior Frontend Engineer"
+                                    placeholder="e.g. Senior Full Stack Engineer"
                                     required
                                     className="mt-1 text-sm bg-gray-50/50 border-gray-200"
                                 />
@@ -247,7 +308,7 @@ const PostJob = () => {
                                     onChange={changeEventHandler}
                                     placeholder="Describe the day-to-day responsibilities, ideal candidate background, and growth opportunities..."
                                     required
-                                    rows={4}
+                                    rows={5}
                                     className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50/50 p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#6A38C2] focus:border-[#6A38C2]"
                                 />
                             </div>

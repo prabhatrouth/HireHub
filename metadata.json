@@ -1,8 +1,9 @@
 {
   "name": "HireHub AI",
-  "description": "HireHub AI: Intelligent Job Recruitment and Applicant Tracking System powered by Gemini AI with automated skill matching, AI candidate scoring, and smart recommendations.",
+  "description": "HireHub AI: Intelligent Job Recruitment and Applicant Tracking System with automated skill matching, AI candidate scoring, cover letter generation, interview prep, and smart recommendations.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }
+

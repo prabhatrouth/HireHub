@@ -94,7 +94,7 @@ const HeroSection = () => {
                             <Sparkles className="w-4 h-4" />
                         </div>
                         <div>
-                            <p className="text-xs font-bold text-gray-900">Gemini AI Engine</p>
+                            <p className="text-xs font-bold text-gray-900">HireHub AI Engine</p>
                             <p className="text-[11px] text-gray-500">Automated resume & skill scoring</p>
                         </div>
                     </div>

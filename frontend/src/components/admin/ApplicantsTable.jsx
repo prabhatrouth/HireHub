@@ -90,7 +90,7 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
         return (
             <div className="bg-white rounded-xl border border-gray-200/80 p-12 text-center shadow-sm">
                 <Sparkles className="w-8 h-8 text-purple-600 animate-pulse mx-auto mb-3" />
-                <p className="text-sm font-medium text-gray-700">Evaluating candidate profiles with Gemini AI...</p>
+                <p className="text-sm font-medium text-gray-700">Evaluating candidate profiles with AI Intelligence...</p>
                 <p className="text-xs text-gray-400 mt-1">Analyzing resumes, candidate skill matrix, and job requirements</p>
             </div>
         );
@@ -270,7 +270,7 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                 <div className="overflow-x-auto">
                     <Table>
                         <TableCaption className="pb-3 text-xs text-gray-500">
-                            Ranked and scored with Google Gemini AI matching algorithms &bull; Real-time skill verification
+                            Ranked and scored with HireHub AI matching algorithms &bull; Real-time skill verification
                         </TableCaption>
                         <TableHeader className="bg-gray-50/80">
                             <TableRow className="border-b border-gray-200">
@@ -445,7 +445,7 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                         AI Candidate Fit Analysis
                                     </DialogTitle>
                                     <DialogDescription className="text-xs text-gray-500 mt-0.5">
-                                        Intelligent skill matching report powered by Gemini AI
+                                        Intelligent skill matching report powered by HireHub AI
                                     </DialogDescription>
                                 </div>
                                 <div className={`px-3 py-1 rounded-full text-sm font-bold border ${getScoreColor(selectedApplicant.aiScore || 75)}`}>
