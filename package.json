@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node backend/index.js",
     "build": "vite build --config frontend/vite.config.js",
+    "postinstall": "npm run build",
     "lint": "eslint frontend/src --ext js,jsx",
     "start": "NODE_ENV=production node backend/index.js",
     "seed": "node backend/seed.js"

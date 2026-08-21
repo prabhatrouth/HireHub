@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import connectDB from "./utils/db.js";
 import userRoute from "./routes/user.route.js";
@@ -69,6 +70,8 @@ app.use((err, req, res, next) => {
 // Vite Middleware (Dev) or Static Serve (Prod)
 async function startServer() {
     const isProduction = process.env.NODE_ENV === "production";
+    const distPath = path.join(frontendDir, "dist");
+    const indexPath = path.join(distPath, "index.html");
 
     if (!isProduction) {
         try {
@@ -86,18 +89,40 @@ async function startServer() {
         } catch (viteErr) {
             console.error("Failed to start Vite middleware:", viteErr.message);
             // Fallback to static serving if dist exists
-            const distPath = path.join(frontendDir, "dist");
-            app.use(express.static(distPath));
-            app.get("*", (req, res) => {
-                res.sendFile(path.join(distPath, "index.html"));
-            });
+            if (fs.existsSync(indexPath)) {
+                app.use(express.static(distPath));
+                app.get("*", (req, res) => {
+                    res.sendFile(indexPath);
+                });
+            }
         }
     } else {
-        const distPath = path.join(frontendDir, "dist");
-        app.use(express.static(distPath));
-        app.get("*", (req, res) => {
-            res.sendFile(path.join(distPath, "index.html"));
-        });
+        if (fs.existsSync(indexPath)) {
+            app.use(express.static(distPath));
+            app.get("*", (req, res) => {
+                res.sendFile(indexPath);
+            });
+            console.log("[HireHub] Serving static build from frontend/dist");
+        } else {
+            console.warn("[HireHub] frontend/dist/index.html not found! Attempting Vite fallback or providing status page.");
+            try {
+                const { createServer: createViteServer } = await import("vite");
+                const vite = await createViteServer({
+                    root: frontendDir,
+                    server: {
+                        middlewareMode: true,
+                        hmr: false,
+                    },
+                    appType: "spa",
+                });
+                app.use(vite.middlewares);
+            } catch (fallbackErr) {
+                app.get("*", (req, res) => {
+                    if (req.path.startsWith("/api/")) return res.status(404).json({ error: "API route not found" });
+                    res.send("<h1>HireHub is running</h1><p>Building frontend assets or API ready. Please ensure 'npm run build' has completed.</p>");
+                });
+            }
+        }
     }
 
     const PORT = 3000;
