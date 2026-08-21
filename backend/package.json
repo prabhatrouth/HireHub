@@ -1,16 +1,19 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "HireHub AI Backend",
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "start": "node index.js",
     "dev": "nodemon index.js",
+    "seed": "node seed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google/genai": "^0.1.2",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.3.0",
     "cookie-parser": "^1.4.6",

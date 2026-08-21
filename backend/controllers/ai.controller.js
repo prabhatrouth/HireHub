@@ -1,7 +1,7 @@
 import { Application } from "../models/application.model.js";
 import { Job } from "../models/job.model.js";
 import { User } from "../models/user.model.js";
-import { buildCandidateScore, getResumeText, rankJobsWithAI } from "../services/gemini.service.js";
+import { buildCandidateScore, getResumeText, rankJobsWithAI, evaluateApplicantsWithAI } from "../services/gemini.service.js";
 import { mockStore } from "../utils/mockStore.js";
 import mongoose from "mongoose";
 
@@ -83,6 +83,91 @@ export const getJobRecommendations = async (req, res) => {
             recommendations: [],
             success: true,
             message: "Unable to generate AI recommendations right now.",
+        });
+    }
+};
+
+// Recruiter AI Applicant Ranking & Skill Match Analysis
+export const getApplicantsAIEvaluation = async (req, res) => {
+    try {
+        const jobId = req.params.jobId;
+        let job = null;
+        let applications = [];
+
+        if (isDbConnected()) {
+            job = await Job.findById(jobId).populate({
+                path: "applications",
+                options: { sort: { createdAt: -1 } },
+                populate: { path: "applicant" },
+            });
+
+            if (!job) {
+                return res.status(404).json({ message: "Job not found", success: false });
+            }
+            applications = job.applications || [];
+        } else {
+            job = mockStore.jobs.find((j) => String(j._id) === String(jobId));
+            if (!job) {
+                return res.status(404).json({ message: "Job not found", success: false });
+            }
+            applications = mockStore.applications
+                .filter((a) => String(a.job) === String(jobId))
+                .map((a) => {
+                    const applicant = typeof a.applicant === "object"
+                        ? a.applicant
+                        : mockStore.users.find((u) => String(u._id) === String(a.applicant)) || { fullname: "Applicant" };
+                    return { ...a, applicant };
+                });
+        }
+
+        if (applications.length === 0) {
+            return res.status(200).json({
+                job,
+                evaluations: [],
+                stats: { total: 0, highMatches: 0, avgScore: 0 },
+                success: true,
+            });
+        }
+
+        const evaluations = await evaluateApplicantsWithAI({ job, applications });
+        const evalMap = new Map(evaluations.map((e) => [String(e.applicationId), e]));
+
+        const scoredApplications = applications.map((app) => {
+            const aiData = evalMap.get(String(app._id)) || {
+                matchScore: 60,
+                fitTier: "Moderate Match",
+                matchingSkills: [],
+                missingSkills: [],
+                strengths: ["Profile under review"],
+                recommendationSummary: "Standard applicant profile.",
+            };
+            return {
+                ...app,
+                aiEvaluation: aiData,
+            };
+        }).sort((a, b) => (b.aiEvaluation?.matchScore || 0) - (a.aiEvaluation?.matchScore || 0));
+
+        const total = scoredApplications.length;
+        const highMatches = scoredApplications.filter((a) => (a.aiEvaluation?.matchScore || 0) >= 80).length;
+        const totalScore = scoredApplications.reduce((acc, curr) => acc + (curr.aiEvaluation?.matchScore || 0), 0);
+        const avgScore = total > 0 ? Math.round(totalScore / total) : 0;
+
+        return res.status(200).json({
+            job,
+            applications: scoredApplications,
+            evaluations,
+            stats: {
+                total,
+                highMatches,
+                avgScore,
+            },
+            success: true,
+        });
+    } catch (error) {
+        console.error("AI applicant evaluation failed:", error);
+        return res.status(500).json({
+            message: "Failed to evaluate applicants with AI",
+            success: false,
         });
     }
 };

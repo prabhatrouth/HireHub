@@ -1,5 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
-
 const MAX_RESUME_BYTES = 5 * 1024 * 1024;
 const MAX_RESUME_CHARACTERS = 12000;
 
@@ -37,6 +35,21 @@ export const buildCandidateScore = (profile, job) => {
     return [...new Set(jobTerms)].reduce((score, term) => score + (profileText.includes(term) ? 1 : 0), 0);
 };
 
+// Safe GenAI Client Loader
+const getGenAIClient = async () => {
+    if (!process.env.GEMINI_API_KEY) return null;
+    try {
+        const genaiModule = await import("@google/genai");
+        const GoogleGenAI = genaiModule.GoogleGenAI || genaiModule.default?.GoogleGenAI;
+        if (!GoogleGenAI) return null;
+        return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    } catch (err) {
+        console.warn("[HireHub AI] Could not load @google/genai module, fallback enabled:", err.message);
+        return null;
+    }
+};
+
+// 1. Student Job Recommendations
 export const rankJobsWithAI = async ({ profile, resumeText, jobs }) => {
     const candidateJobs = jobs.map((job) => ({
         jobId: String(job._id),
@@ -56,7 +69,6 @@ export const rankJobsWithAI = async ({ profile, resumeText, jobs }) => {
         resumeText: cleanText(resumeText, MAX_RESUME_CHARACTERS),
     };
 
-    // Heuristic fallback builder
     const buildFallbackRecommendations = () => {
         const profileSkillsLower = new Set(
             (profile.skills || []).map((s) => String(s).toLowerCase().trim())
@@ -70,28 +82,28 @@ export const rankJobsWithAI = async ({ profile, resumeText, jobs }) => {
             const missingSkills = reqs.filter(
                 (req) => !profileSkillsLower.has(req.toLowerCase().trim())
             );
-            const scoreRatio = reqs.length > 0 ? matchingSkills.length / reqs.length : 0.5;
-            const matchScore = Math.min(98, Math.max(45, Math.round(scoreRatio * 100)));
+            const scoreRatio = reqs.length > 0 ? matchingSkills.length / reqs.length : 0.6;
+            const matchScore = Math.min(98, Math.max(50, Math.round(scoreRatio * 100)));
 
             return {
                 jobId: job.jobId,
                 matchScore,
                 reason: matchingSkills.length > 0
-                    ? `Matches profile skills: ${matchingSkills.join(", ")} for ${job.title} position.`
-                    : `Good career opportunity matching background in ${job.location || "tech"}.`,
-                matchingSkills: matchingSkills.length > 0 ? matchingSkills : ["General background"],
+                    ? `Strong profile alignment in: ${matchingSkills.join(", ")} for ${job.title}.`
+                    : `Relevant career opportunity matching technical background.`,
+                matchingSkills: matchingSkills.length > 0 ? matchingSkills : ["Core Foundation"],
                 missingSkills,
             };
         }).sort((a, b) => b.matchScore - a.matchScore);
     };
 
-    if (!process.env.GEMINI_API_KEY) {
+    const ai = await getGenAIClient();
+    if (!ai) {
         return buildFallbackRecommendations();
     }
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const prompt = `You rank existing job candidates for a student. Return at most 10 recommendations in JSON format.
+        const prompt = `You rank existing job candidates for a student. Return at most 10 recommendations in strict JSON format.
 You must use only jobId values supplied in CANDIDATE_JOBS. Never invent a job, requirement, credential, or skill.
 Scores are integers from 0 to 100.
 Reasons must be concise and grounded in the provided student data and job requirements.
@@ -131,5 +143,156 @@ ${JSON.stringify(candidateJobs)}`;
     } catch (err) {
         console.warn("[Gemini API] Failed to generate AI recommendations, using fallback:", err.message);
         return buildFallbackRecommendations();
+    }
+};
+
+// 2. Recruiter Applicant Intelligence & Skill Scoring
+export const evaluateApplicantsWithAI = async ({ job, applications }) => {
+    const jobData = {
+        title: job.title || "Job Position",
+        description: cleanText(job.description, 1000),
+        requirements: (job.requirements || []).map((r) => cleanText(r, 100)),
+        experienceLevel: job.experienceLevel || 0,
+        location: job.location || "Remote",
+    };
+
+    const applicantsData = applications.map((app) => {
+        const applicant = app.applicant || {};
+        const profile = applicant.profile || {};
+        return {
+            applicationId: String(app._id),
+            applicantId: String(applicant._id || ""),
+            fullname: applicant.fullname || "Applicant",
+            email: applicant.email || "",
+            skills: profile.skills || [],
+            bio: cleanText(profile.bio, 500),
+            resumeOriginalName: profile.resumeOriginalName || "",
+            status: app.status || "pending",
+        };
+    });
+
+    const buildFallbackEvaluation = () => {
+        const jobReqsLower = (jobData.requirements || []).map((r) => r.toLowerCase().trim());
+        const jobTitleWords = jobData.title.toLowerCase().split(/\s+/);
+
+        return applicantsData.map((cand) => {
+            const candSkillsLower = (cand.skills || []).map((s) => s.toLowerCase().trim());
+            const candBioLower = (cand.bio || "").toLowerCase();
+
+            const matchingSkills = (jobData.requirements || []).filter((req) => {
+                const rLow = req.toLowerCase().trim();
+                return candSkillsLower.some((s) => s.includes(rLow) || rLow.includes(s)) || candBioLower.includes(rLow);
+            });
+
+            const missingSkills = (jobData.requirements || []).filter(
+                (req) => !matchingSkills.includes(req)
+            );
+
+            let scoreRatio = 0.5;
+            if (jobData.requirements.length > 0) {
+                scoreRatio = matchingSkills.length / jobData.requirements.length;
+            }
+
+            // Bonus points for bio / title overlap
+            const titleMatches = jobTitleWords.filter((w) => w.length > 2 && candBioLower.includes(w)).length;
+            const bonus = Math.min(15, titleMatches * 5);
+
+            let rawScore = Math.round(scoreRatio * 85 + bonus);
+            if (matchingSkills.length === 0 && cand.skills.length > 0) rawScore = 48;
+            if (matchingSkills.length === 0 && cand.skills.length === 0) rawScore = 35;
+            const matchScore = Math.min(98, Math.max(30, rawScore));
+
+            let fitTier = "Moderate Match";
+            if (matchScore >= 85) fitTier = "Top Match";
+            else if (matchScore >= 70) fitTier = "Strong Match";
+            else if (matchScore < 50) fitTier = "Developing";
+
+            const strengths = [];
+            if (matchingSkills.length > 0) {
+                strengths.push(`Direct skill proficiency in ${matchingSkills.slice(0, 3).join(", ")}`);
+            }
+            if (cand.skills.length >= 4) {
+                strengths.push(`Broad tech stack knowledge with ${cand.skills.length} listed capabilities`);
+            }
+            if (cand.bio) {
+                strengths.push(`Relevant background profile in ${cand.bio.slice(0, 50)}...`);
+            }
+            if (strengths.length === 0) {
+                strengths.push("Candidate profile registered with contact details");
+            }
+
+            const recommendationSummary = matchScore >= 80
+                ? `Excellent fit. Demonstrates strong alignment with ${matchingSkills.length} required skill(s) for ${jobData.title}. Recommended for interview.`
+                : matchScore >= 60
+                ? `Good potential match. Has foundation in ${matchingSkills.join(", ") || "core technologies"}, but may need development in ${missingSkills.slice(0, 2).join(", ") || "specialized areas"}.`
+                : `Developing match. Missing several primary requirements (${missingSkills.slice(0, 3).join(", ") || "core requirements"}).`;
+
+            return {
+                applicationId: cand.applicationId,
+                matchScore,
+                fitTier,
+                matchingSkills: matchingSkills.length > 0 ? matchingSkills : (cand.skills.slice(0, 2) || []),
+                missingSkills,
+                strengths,
+                recommendationSummary,
+            };
+        }).sort((a, b) => b.matchScore - a.matchScore);
+    };
+
+    const ai = await getGenAIClient();
+    if (!ai) {
+        return buildFallbackEvaluation();
+    }
+
+    try {
+        const prompt = `You are an expert AI Technical Recruiter for HireHub AI.
+Analyze each applicant against the job details and requirements.
+Return a valid JSON object with the "evaluations" array.
+
+CRITICAL INSTRUCTIONS:
+- You must evaluate ONLY the provided applicationId values.
+- Calculate matchScore as an integer between 0 and 100 based on genuine skill overlap, requirements match, and candidate bio.
+- fitTier must be one of: "Top Match" (85-100), "Strong Match" (70-84), "Moderate Match" (50-69), "Developing" (<50).
+- matchingSkills: exact requirements or related skills the candidate possesses.
+- missingSkills: job requirements the candidate lacks.
+- strengths: 2-3 bullet points highlighting candidate strengths.
+- recommendationSummary: concise 1-2 sentence recruiter evaluation.
+
+Output Format:
+{
+  "evaluations": [
+    {
+      "applicationId": "string",
+      "matchScore": 92,
+      "fitTier": "Top Match",
+      "matchingSkills": ["React", "JavaScript"],
+      "missingSkills": ["Docker"],
+      "strengths": ["Strong frontend experience", "Active project portfolio"],
+      "recommendationSummary": "Highly qualified candidate with strong React skills. Fast-track for interview."
+    }
+  ]
+}
+
+JOB DETAILS:
+${JSON.stringify(jobData)}
+
+APPLICANTS:
+${JSON.stringify(applicantsData)}`;
+
+        const response = await ai.models.generateContent({
+            model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                temperature: 0.15,
+            },
+        });
+
+        const outputText = response.text;
+        const parsed = JSON.parse(outputText);
+        return parsed.evaluations || buildFallbackEvaluation();
+    } catch (err) {
+        console.warn("[Gemini API] Failed to evaluate applicants with AI, using fallback:", err.message);
+        return buildFallbackEvaluation();
     }
 };

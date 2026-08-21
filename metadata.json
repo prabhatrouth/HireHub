@@ -1,6 +1,6 @@
 {
-  "name": "HireHub",
-  "description": "A modern job recruitment and career platform connecting job seekers and employers.",
+  "name": "HireHub AI",
+  "description": "HireHub AI: Intelligent Job Recruitment and Applicant Tracking System powered by Gemini AI with automated skill matching, AI candidate scoring, and smart recommendations.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

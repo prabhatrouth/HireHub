@@ -32,15 +32,16 @@ export const postJob = async (req, res) => {
                 company: companyId,
                 created_by: userId,
             });
+            const populatedJob = await Job.findById(job._id).populate({ path: "company" });
             return res.status(201).json({
                 message: "New job created successfully.",
-                job,
+                job: populatedJob || job,
                 success: true,
             });
         } else {
             const company = mockStore.companies.find((c) => String(c._id) === String(companyId)) || {
                 _id: companyId,
-                name: "Company",
+                name: "Tech Solutions",
                 location,
             };
             const newJob = {
@@ -96,11 +97,26 @@ export const getAllJobs = async (req, res) => {
             });
         } else {
             const kw = keyword.toLowerCase();
-            const filteredJobs = mockStore.jobs.filter((j) =>
+            const populatedJobs = mockStore.jobs.map((j) => {
+                let companyObj = j.company;
+                if (typeof companyObj === "string") {
+                    const foundComp = mockStore.companies.find(
+                        (c) => String(c._id) === String(companyObj) || c.name.toLowerCase() === companyObj.toLowerCase()
+                    );
+                    companyObj = foundComp || { _id: companyObj, name: companyObj };
+                } else if (companyObj && !companyObj.name && companyObj._id) {
+                    const foundComp = mockStore.companies.find((c) => String(c._id) === String(companyObj._id));
+                    if (foundComp) companyObj = foundComp;
+                }
+                return { ...j, company: companyObj };
+            });
+
+            const filteredJobs = populatedJobs.filter((j) =>
                 !kw ||
                 j.title?.toLowerCase().includes(kw) ||
                 j.description?.toLowerCase().includes(kw) ||
                 j.location?.toLowerCase().includes(kw) ||
+                j.company?.name?.toLowerCase().includes(kw) ||
                 (j.requirements && j.requirements.some((r) => r.toLowerCase().includes(kw)))
             );
             return res.status(200).json({
@@ -123,7 +139,7 @@ export const getJobById = async (req, res) => {
         const jobId = req.params.id;
 
         if (isDbConnected()) {
-            const job = await Job.findById(jobId)
+            let job = await Job.findById(jobId)
                 .populate({ path: "applications" })
                 .populate({ path: "company" });
 
@@ -142,7 +158,24 @@ export const getJobById = async (req, res) => {
                     success: false,
                 });
             }
-            return res.status(200).json({ job, success: true });
+
+            let companyObj = job.company;
+            if (typeof companyObj === "string") {
+                const foundComp = mockStore.companies.find(
+                    (c) => String(c._id) === String(companyObj) || c.name.toLowerCase() === companyObj.toLowerCase()
+                );
+                companyObj = foundComp || { _id: companyObj, name: companyObj };
+            } else if (companyObj && !companyObj.name && companyObj._id) {
+                const foundComp = mockStore.companies.find((c) => String(c._id) === String(companyObj._id));
+                if (foundComp) companyObj = foundComp;
+            }
+
+            const completeJob = {
+                ...job,
+                company: companyObj,
+            };
+
+            return res.status(200).json({ job: completeJob, success: true });
         }
     } catch (error) {
         console.error("Get Job By Id Error:", error);
@@ -168,9 +201,24 @@ export const getAdminJobs = async (req, res) => {
                 success: true,
             });
         } else {
-            const adminJobs = mockStore.jobs.filter(
-                (j) => String(j.created_by) === String(adminId) || adminId === "recruiter_1"
-            );
+            const adminJobs = mockStore.jobs
+                .filter(
+                    (j) => String(j.created_by) === String(adminId) || adminId === "recruiter_1"
+                )
+                .map((j) => {
+                    let companyObj = j.company;
+                    if (typeof companyObj === "string") {
+                        const foundComp = mockStore.companies.find(
+                            (c) => String(c._id) === String(companyObj) || c.name.toLowerCase() === companyObj.toLowerCase()
+                        );
+                        companyObj = foundComp || { _id: companyObj, name: companyObj };
+                    } else if (companyObj && !companyObj.name && companyObj._id) {
+                        const foundComp = mockStore.companies.find((c) => String(c._id) === String(companyObj._id));
+                        if (foundComp) companyObj = foundComp;
+                    }
+                    return { ...j, company: companyObj };
+                });
+
             return res.status(200).json({
                 jobs: adminJobs,
                 success: true,

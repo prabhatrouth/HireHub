@@ -1,17 +1,15 @@
-import React, { useState } from 'react'
-import Navbar from '../shared/Navbar'
-import { Label } from '../ui/label'
-import { Input } from '../ui/input'
-import { Button } from '../ui/button'
-import { useSelector } from 'react-redux'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import axios from 'axios'
-import { JOB_API_END_POINT } from '@/utils/constant'
-import { toast } from 'sonner'
-import { useNavigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
-
-const companyArray = [];
+import React, { useState } from 'react';
+import Navbar from '../shared/Navbar';
+import { Label } from '../ui/label';
+import { Input } from '../ui/input';
+import { Button } from '../ui/button';
+import { useSelector } from 'react-redux';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import axios from 'axios';
+import { JOB_API_END_POINT } from '@/utils/constant';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, Briefcase, Sparkles, Building2, ArrowLeft } from 'lucide-react';
 
 const PostJob = () => {
     const [input, setInput] = useState({
@@ -20,44 +18,38 @@ const PostJob = () => {
         requirements: "",
         salary: "",
         location: "",
-        jobType: "",
+        jobType: "Full-time",
         experience: "",
-        position: 0,
+        position: 1,
         companyId: ""
     });
 
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
-
     const { companies } = useSelector(store => store.company);
 
     const changeEventHandler = (e) => {
         setInput({ ...input, [e.target.name]: e.target.value });
     };
 
-    const selectChangeHandler = (value) => {
-        const selectedCompany = companies.find(
-            (company) => company.name.toLowerCase() === value
-        );
-
+    const selectChangeHandler = (companyId) => {
         setInput({
             ...input,
-            companyId: selectedCompany._id
+            companyId: companyId
         });
     };
 
     const submitHandler = async (e) => {
         e.preventDefault();
 
-        // Company validation
         if (!input.companyId) {
-            toast.error("Please select a company");
+            toast.error("Please select a registered company");
             return;
         }
 
         try {
             setLoading(true);
-
+            axios.defaults.withCredentials = true;
             const res = await axios.post(
                 `${JOB_API_END_POINT}/post`,
                 input,
@@ -69,11 +61,10 @@ const PostJob = () => {
                 }
             );
 
-            if (res.data.success) {
-                toast.success(res.data.message);
+            if (res.data?.success) {
+                toast.success(res.data.message || "Job posted successfully!");
                 navigate("/admin/jobs");
             }
-
         } catch (error) {
             toast.error(
                 error.response?.data?.message || "Failed to post job"
@@ -81,206 +72,208 @@ const PostJob = () => {
         } finally {
             setLoading(false);
         }
-    }
+    };
 
     return (
-        <div>
+        <div className="min-h-screen bg-[#F8FAFC]">
             <Navbar />
-
-            <div className='flex items-center justify-center w-screen my-5'>
-
-                <form
-                    onSubmit={submitHandler}
-                    className='p-8 max-w-4xl border border-gray-200 shadow-lg rounded-md'
-                >
-
-                    <div className='grid grid-cols-2 gap-2'>
-
-                        {/* Title */}
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Header */}
+                <div className="mb-6 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate('/admin/jobs')}
+                            className="rounded-full h-8 w-8 p-0"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
                         <div>
-                            <Label>Title</Label>
-
-                            <Input
-                                type="text"
-                                name="title"
-                                value={input.title}
-                                onChange={changeEventHandler}
-                                placeholder="Enter job title"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                                <Briefcase className="w-5 h-5 text-[#6A38C2]" />
+                                Post a New Job Opportunity
+                            </h1>
+                            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                                Create a listing with AI candidate skill scoring enabled
+                            </p>
                         </div>
+                    </div>
+                </div>
 
-                        {/* Description */}
-                        <div>
-                            <Label>Description</Label>
+                {/* Form Card */}
+                <div className="bg-white rounded-2xl border border-gray-200/90 p-6 sm:p-8 shadow-xs">
+                    <form onSubmit={submitHandler} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Title */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Job Title</Label>
+                                <Input
+                                    type="text"
+                                    name="title"
+                                    value={input.title}
+                                    onChange={changeEventHandler}
+                                    placeholder="e.g. Senior Frontend Engineer"
+                                    required
+                                    className="mt-1 text-sm bg-gray-50/50 border-gray-200"
+                                />
+                            </div>
 
-                            <Input
-                                type="text"
-                                name="description"
-                                value={input.description}
-                                onChange={changeEventHandler}
-                                placeholder="Enter job description"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
-                        </div>
-
-                        {/* Requirements */}
-                        <div>
-                            <Label>Requirements</Label>
-
-                            <Input
-                                type="text"
-                                name="requirements"
-                                value={input.requirements}
-                                onChange={changeEventHandler}
-                                placeholder="React, Node.js, MongoDB"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
-                        </div>
-
-                        {/* Salary */}
-                        <div>
-                            <Label>Salary</Label>
-
-                            <Input
-                                type="number"
-                                name="salary"
-                                value={input.salary}
-                                onChange={changeEventHandler}
-                                placeholder="500000"
-                                min="1"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
-                        </div>
-
-                        {/* Location */}
-                        <div>
-                            <Label>Location</Label>
-
-                            <Input
-                                type="text"
-                                name="location"
-                                value={input.location}
-                                onChange={changeEventHandler}
-                                placeholder="Kolkata"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
-                        </div>
-
-                        {/* Job Type */}
-                        <div>
-                            <Label>Job Type</Label>
-
-                            <Input
-                                type="text"
-                                name="jobType"
-                                value={input.jobType}
-                                onChange={changeEventHandler}
-                                placeholder="Full-time"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
-                        </div>
-
-                        {/* Experience */}
-                        <div>
-                            <Label>Experience Level</Label>
-
-                            <Input
-                                type="text"
-                                name="experience"
-                                value={input.experience}
-                                onChange={changeEventHandler}
-                                placeholder="0-2 years"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
-                        </div>
-
-                        {/* Position */}
-                        <div>
-                            <Label>No of Position</Label>
-
-                            <Input
-                                type="number"
-                                name="position"
-                                value={input.position}
-                                onChange={changeEventHandler}
-                                min="1"
-                                required
-                                className="focus-visible:ring-offset-0 focus-visible:ring-0 my-1"
-                            />
-                        </div>
-
-                        {/* Company */}
-                        {
-                            companies.length > 0 && (
-                                <div>
-                                    <Label>Company</Label>
-
+                            {/* Company Selector */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Company</Label>
+                                {companies?.length > 0 ? (
                                     <Select onValueChange={selectChangeHandler}>
-
-                                        <SelectTrigger className="w-[180px]">
+                                        <SelectTrigger className="mt-1 w-full text-sm bg-gray-50/50 border-gray-200">
                                             <SelectValue placeholder="Select a Company" />
                                         </SelectTrigger>
-
                                         <SelectContent>
                                             <SelectGroup>
-                                                {
-                                                    companies.map((company) => {
-                                                        return (
-                                                            <SelectItem
-                                                                key={company._id}
-                                                                value={company?.name?.toLowerCase()}
-                                                            >
-                                                                {company.name}
-                                                            </SelectItem>
-                                                        )
-                                                    })
-                                                }
+                                                {companies.map((company) => (
+                                                    <SelectItem
+                                                        key={company._id}
+                                                        value={company._id}
+                                                    >
+                                                        {company.name}
+                                                    </SelectItem>
+                                                ))}
                                             </SelectGroup>
                                         </SelectContent>
-
                                     </Select>
+                                ) : (
+                                    <div className="mt-1 text-xs text-rose-600 bg-rose-50 p-2 rounded-lg">
+                                        No companies found. Please register a company first.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Requirements (Crucial for AI evaluation) */}
+                            <div className="sm:col-span-2">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
+                                        Key Skill Requirements (Comma separated)
+                                    </Label>
+                                    <span className="text-[11px] text-[#6A38C2] font-semibold">Powers AI Applicant Ranking</span>
                                 </div>
-                            )
-                        }
+                                <Input
+                                    type="text"
+                                    name="requirements"
+                                    value={input.requirements}
+                                    onChange={changeEventHandler}
+                                    placeholder="e.g. React, TypeScript, Node.js, Tailwind CSS, REST APIs"
+                                    required
+                                    className="mt-1 text-sm bg-purple-50/20 border-purple-200 focus-visible:border-[#6A38C2]"
+                                />
+                            </div>
 
-                    </div>
+                            {/* Location */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Location</Label>
+                                <Input
+                                    type="text"
+                                    name="location"
+                                    value={input.location}
+                                    onChange={changeEventHandler}
+                                    placeholder="e.g. Remote / Bangalore, India"
+                                    required
+                                    className="mt-1 text-sm bg-gray-50/50 border-gray-200"
+                                />
+                            </div>
 
-                    {
-                        loading
-                            ?
-                            <Button className="w-full my-4">
-                                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                                Please wait
-                            </Button>
-                            :
+                            {/* Salary */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Salary (LPA)</Label>
+                                <Input
+                                    type="number"
+                                    name="salary"
+                                    value={input.salary}
+                                    onChange={changeEventHandler}
+                                    placeholder="e.g. 12"
+                                    min="1"
+                                    required
+                                    className="mt-1 text-sm bg-gray-50/50 border-gray-200"
+                                />
+                            </div>
+
+                            {/* Job Type */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Job Type</Label>
+                                <Input
+                                    type="text"
+                                    name="jobType"
+                                    value={input.jobType}
+                                    onChange={changeEventHandler}
+                                    placeholder="e.g. Full-time / Internship / Contract"
+                                    required
+                                    className="mt-1 text-sm bg-gray-50/50 border-gray-200"
+                                />
+                            </div>
+
+                            {/* Experience */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Experience Required (Years)</Label>
+                                <Input
+                                    type="text"
+                                    name="experience"
+                                    value={input.experience}
+                                    onChange={changeEventHandler}
+                                    placeholder="e.g. 2-4 years"
+                                    required
+                                    className="mt-1 text-sm bg-gray-50/50 border-gray-200"
+                                />
+                            </div>
+
+                            {/* Positions */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Open Positions</Label>
+                                <Input
+                                    type="number"
+                                    name="position"
+                                    value={input.position}
+                                    onChange={changeEventHandler}
+                                    min="1"
+                                    required
+                                    className="mt-1 text-sm bg-gray-50/50 border-gray-200"
+                                />
+                            </div>
+
+                            {/* Description */}
+                            <div className="sm:col-span-2">
+                                <Label className="text-xs font-semibold text-gray-700">Job Role Description & Responsibilities</Label>
+                                <textarea
+                                    name="description"
+                                    value={input.description}
+                                    onChange={changeEventHandler}
+                                    placeholder="Describe the day-to-day responsibilities, ideal candidate background, and growth opportunities..."
+                                    required
+                                    rows={4}
+                                    className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50/50 p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#6A38C2] focus:border-[#6A38C2]"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100">
                             <Button
                                 type="submit"
-                                className="w-full my-4"
+                                disabled={loading || companies?.length === 0}
+                                className="w-full bg-[#6A38C2] hover:bg-[#582da5] text-white font-bold h-11 text-sm shadow-xs"
                             >
-                                Post New Job
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Publishing Job Listing...
+                                    </>
+                                ) : (
+                                    'Post Job & Enable AI Applicant Screening'
+                                )}
                             </Button>
-                    }
-
-                    {
-                        companies.length === 0 &&
-                        <p className='text-xs text-red-600 font-bold text-center my-3'>
-                            *Please register a company first, before posting a jobs
-                        </p>
-                    }
-
-                </form>
-
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-    )
-}
+    );
+};
 
-export default PostJob
+export default PostJob;
