@@ -19,11 +19,14 @@ import {
     AlertCircle,
     Check,
     X,
-    Eye
+    Eye,
+    Video,
+    Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { APPLICATION_API_END_POINT } from '@/utils/constant';
 import axios from 'axios';
+import ScheduleInterviewDialog from './ScheduleInterviewDialog';
 
 const shortlistingStatus = ["Accepted", "Rejected"];
 
@@ -60,10 +63,17 @@ const getStatusBadge = (status) => {
     );
 };
 
-const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = 'table', onStatusUpdate, loading = false }) => {
+const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = 'table', onStatusUpdate, loading = false, jobData = null }) => {
     const [selectedApplicant, setSelectedApplicant] = useState(null);
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+    const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+    const [interviewApplicant, setInterviewApplicant] = useState(null);
     const [updatingId, setUpdatingId] = useState(null);
+
+    const openScheduleModal = (item) => {
+        setInterviewApplicant(item);
+        setIsScheduleModalOpen(true);
+    };
 
     const statusHandler = async (status, id) => {
         setUpdatingId(id);
@@ -227,6 +237,15 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                 </div>
 
                                 <div className="flex items-center gap-1.5">
+                                    <Button
+                                        size="sm"
+                                        onClick={() => openScheduleModal(item)}
+                                        className="h-8 text-xs font-semibold bg-[#6A38C2] hover:bg-[#582ea8] text-white"
+                                    >
+                                        <Video className="w-3 h-3 mr-1" />
+                                        Interview
+                                    </Button>
+
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -393,6 +412,15 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                         <TableCell className="py-3 text-right pr-4">
                                             <div className="flex items-center justify-end gap-1.5">
                                                 <Button
+                                                    size="sm"
+                                                    onClick={() => openScheduleModal(item)}
+                                                    className="h-8 text-xs font-semibold bg-[#6A38C2] hover:bg-[#582ea8] text-white shadow-xs"
+                                                >
+                                                    <Video className="w-3 h-3 mr-1" />
+                                                    Schedule Call
+                                                </Button>
+
+                                                <Button
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() => openAiModal(item)}
@@ -555,6 +583,18 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Button
+                                        size="sm"
+                                        onClick={() => {
+                                            const app = selectedApplicant;
+                                            setIsAiModalOpen(false);
+                                            openScheduleModal(app);
+                                        }}
+                                        className="text-xs bg-[#6A38C2] hover:bg-[#582ea8] text-white font-semibold"
+                                    >
+                                        <Video className="w-3.5 h-3.5 mr-1" />
+                                        Schedule Interview
+                                    </Button>
+                                    <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() => {
@@ -581,6 +621,17 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                     </DialogContent>
                 </Dialog>
             )}
+
+            {/* Schedule Interview Modal Dialog */}
+            <ScheduleInterviewDialog
+                isOpen={isScheduleModalOpen}
+                onOpenChange={setIsScheduleModalOpen}
+                applicantData={interviewApplicant}
+                jobData={jobData || (interviewApplicant ? { _id: interviewApplicant.job?._id || interviewApplicant.job, title: interviewApplicant.job?.title } : null)}
+                onSuccess={() => {
+                    if (onStatusUpdate) onStatusUpdate();
+                }}
+            />
         </div>
     );
 };

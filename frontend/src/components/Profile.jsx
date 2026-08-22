@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import AppliedJobTable from './AppliedJobTable';
 import UpdateProfileDialog from './UpdateProfileDialog';
 import { useSelector } from 'react-redux';
+import { Link } from 'react-router-dom';
 import useGetAppliedJobs from '@/hooks/useGetAppliedJobs';
 
 const Profile = () => {
@@ -99,32 +100,55 @@ const Profile = () => {
                     </div>
 
                     {/* Resume */}
-                    <div className="pt-5 mt-5 border-t border-gray-100">
-                        <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-2">
-                            Resume Document
-                        </h3>
-                        {hasResume ? (
-                            <a
-                                href={user?.profile?.resume}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50/70 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
-                            >
-                                <FileText className="w-3.5 h-3.5" />
-                                <span>{user?.profile?.resumeOriginalName || 'View Uploaded Resume'}</span>
-                                <ExternalLink className="w-3 h-3 text-blue-400" />
-                            </a>
-                        ) : (
-                            <p className="text-xs text-gray-400">No resume uploaded. Upload a PDF resume to enable automated AI screening.</p>
-                        )}
+                    <div className="pt-5 mt-5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-1">
+                                Resume Document
+                            </h3>
+                            {hasResume ? (
+                                <a
+                                    href={user?.profile?.resume}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50/70 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                                >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span>{user?.profile?.resumeOriginalName || 'View Uploaded Resume'}</span>
+                                    <ExternalLink className="w-3 h-3 text-blue-400" />
+                                </a>
+                            ) : (
+                                <p className="text-xs text-gray-400">No resume uploaded. Upload a PDF resume in Edit Profile to enable automated AI screening.</p>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Link to="/resume-checker">
+                                <Button size="sm" variant="outline" className="text-xs font-semibold border-purple-200 text-[#6A38C2] hover:bg-purple-50 h-8">
+                                    <Sparkles className="w-3 h-3 mr-1" />
+                                    Audit Resume ATS
+                                </Button>
+                            </Link>
+                            <Link to="/recommended">
+                                <Button size="sm" className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-semibold h-8 shadow-xs">
+                                    AI Job Matches
+                                </Button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
 
                 {/* Applied Jobs Section */}
                 <div className="bg-white border border-gray-200/90 rounded-2xl p-6 sm:p-8 shadow-xs">
-                    <h2 className="font-bold text-base sm:text-lg text-gray-900 mb-4 pb-3 border-b border-gray-100">
-                        Your Job Applications
-                    </h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-gray-100">
+                        <div>
+                            <h2 className="font-bold text-base sm:text-lg text-gray-900">
+                                Real-Time Application Pipeline
+                            </h2>
+                            <p className="text-xs text-gray-500">
+                                Monitor live recruiter screening, status changes, and interview stages.
+                            </p>
+                        </div>
+                    </div>
                     <AppliedJobTable />
                 </div>
             </div>

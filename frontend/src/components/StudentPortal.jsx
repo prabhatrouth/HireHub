@@ -34,8 +34,11 @@ import {
     UserCheck,
     GraduationCap,
     Lightbulb,
-    HelpCircle
+    HelpCircle,
+    Video,
+    CalendarCheck
 } from 'lucide-react';
+import ScheduledInterviewsList from './interview/ScheduledInterviewsList';
 
 const StudentPortal = () => {
     useGetAppliedJobs();
@@ -181,6 +184,18 @@ const StudentPortal = () => {
                         {/* Navigation Tabs */}
                         <div className="mt-8 flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                             <button
+                                onClick={() => handleTabChange('my-interviews')}
+                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                                    activeTab === 'my-interviews'
+                                        ? 'bg-white text-purple-900 shadow-md'
+                                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
+                                }`}
+                            >
+                                <Video className="w-4 h-4 text-rose-400" />
+                                My Live Interviews & Video Calls
+                            </button>
+
+                            <button
                                 onClick={() => handleTabChange('matches')}
                                 className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
                                     activeTab === 'matches'
@@ -245,6 +260,13 @@ const StudentPortal = () => {
 
                 {/* Tab Content Body */}
                 <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {/* TAB: My Live Video Interviews */}
+                    {activeTab === 'my-interviews' && (
+                        <div className="space-y-6 animate-in fade-in duration-200">
+                            <ScheduledInterviewsList />
+                        </div>
+                    )}
+
                     {/* TAB 1: AI Job Matches */}
                     {activeTab === 'matches' && (
                         <div className="space-y-6 animate-in fade-in duration-200">

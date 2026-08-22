@@ -267,6 +267,7 @@ const Applicants = () => {
                 <ApplicantsTable
                     applications={filteredApplications}
                     jobRequirements={applicants?.requirements || []}
+                    jobData={applicants}
                     viewMode={viewMode}
                     onStatusUpdate={fetchApplicantData}
                     loading={loading}

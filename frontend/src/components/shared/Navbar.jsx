@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { LogOut, User2, Menu, X, Sparkles, Briefcase, Building2, Compass, Home as HomeIcon, PlusCircle, FileCheck2 } from 'lucide-react';
+import { LogOut, User2, Menu, X, Sparkles, Briefcase, Building2, Compass, Home as HomeIcon, PlusCircle, FileCheck2, Video } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import axios from 'axios';
@@ -19,16 +19,20 @@ const Navbar = () => {
 
     const logoutHandler = async () => {
         try {
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('hirehub_last_activity');
+            localStorage.removeItem('token');
+            localStorage.removeItem('persist:root');
             axios.defaults.withCredentials = true;
             const res = await axios.get(`${USER_API_END_POINT}/logout`, { withCredentials: true });
-            localStorage.removeItem('token');
-            if (res.data?.success) {
-                dispatch(setUser(null));
-                navigate('/');
-                toast.success(res.data.message || 'Logged out successfully');
-            }
+            dispatch(setUser(null));
+            navigate('/');
+            toast.success(res.data?.message || 'Logged out successfully');
         } catch (error) {
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('hirehub_last_activity');
             localStorage.removeItem('token');
+            localStorage.removeItem('persist:root');
             dispatch(setUser(null));
             navigate('/');
             console.error(error);
@@ -72,6 +76,15 @@ const Navbar = () => {
                                         >
                                             <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
                                             Recruiter Hub
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link
+                                            to="/admin/portal?tab=interviews"
+                                            className="transition-colors hover:text-[#6A38C2] flex items-center gap-1.5 font-medium"
+                                        >
+                                            <Video className="w-3.5 h-3.5 text-rose-500" />
+                                            Live Interviews
                                         </Link>
                                     </li>
                                     <li>
@@ -151,6 +164,15 @@ const Navbar = () => {
                                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#6A38C2]"></span>
                                             </span>
                                             Resume Checker
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link
+                                            to="/student/portal?tab=my-interviews"
+                                            className="text-xs bg-rose-50 text-rose-700 font-bold px-2.5 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-100 flex items-center gap-1"
+                                        >
+                                            <Video className="w-3.5 h-3.5 text-rose-600" />
+                                            Interviews
                                         </Link>
                                     </li>
                                     <li>
@@ -304,6 +326,14 @@ const Navbar = () => {
                                     <span>Recruiter Command Hub</span>
                                 </Link>
                                 <Link
+                                    to="/admin/portal?tab=interviews"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                    <Video className="w-4 h-4 text-rose-500" />
+                                    <span>Live Video Interviews</span>
+                                </Link>
+                                <Link
                                     to="/admin/companies"
                                     onClick={() => setMobileMenuOpen(false)}
                                     className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium ${
@@ -373,6 +403,14 @@ const Navbar = () => {
                                 >
                                     <FileCheck2 className="w-4 h-4 text-purple-600" />
                                     <span>ATS Resume Checker</span>
+                                </Link>
+                                <Link
+                                    to="/student/portal?tab=my-interviews"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-rose-700 bg-rose-50"
+                                >
+                                    <Video className="w-4 h-4 text-rose-600" />
+                                    <span>Live Video Interviews</span>
                                 </Link>
                                 <Link
                                     to="/student/portal"

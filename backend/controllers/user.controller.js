@@ -136,7 +136,8 @@ export const login = async (req, res) => {
         };
 
         const secretKey = process.env.SECRET_KEY || "hirehub_default_secret_jwt_key_2026";
-        const token = jwt.sign(tokenData, secretKey, { expiresIn: "1d" });
+        // Session token expires in 3 hours of inactivity/idle time
+        const token = jwt.sign(tokenData, secretKey, { expiresIn: "3h" });
 
         const userPayload = {
             _id: user._id,
@@ -150,7 +151,7 @@ export const login = async (req, res) => {
         return res
             .status(200)
             .cookie("token", token, {
-                maxAge: 1 * 24 * 60 * 60 * 1000,
+                maxAge: 3 * 60 * 60 * 1000, // 3 hours
                 httpOnly: true,
                 secure: true,
                 sameSite: "none",

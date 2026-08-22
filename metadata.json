@@ -1,7 +1,11 @@
 {
   "name": "HireHub AI",
-  "description": "HireHub AI: Intelligent Job Recruitment and Applicant Tracking System with automated skill matching, AI candidate scoring, cover letter generation, interview prep, and smart recommendations.",
-  "requestFramePermissions": [],
+  "description": "HireHub AI: Intelligent Job Recruitment and Applicant Tracking System with live in-browser video interviews, screensharing, automated skill matching, AI candidate scoring, and recruiter hiring workflows.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

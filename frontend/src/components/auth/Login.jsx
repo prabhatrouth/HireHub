@@ -46,7 +46,11 @@ const Login = () => {
 
             if (res.data.success) {
                 if (res.data.token) {
-                    localStorage.setItem("token", res.data.token);
+                    sessionStorage.setItem("token", res.data.token);
+                    sessionStorage.setItem("hirehub_last_activity", Date.now().toString());
+                    // Remove any legacy token from localStorage
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("persist:root");
                 }
                 dispatch(setUser(res.data.user));
                 navigate("/");

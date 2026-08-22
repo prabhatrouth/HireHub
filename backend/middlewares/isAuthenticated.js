@@ -5,7 +5,8 @@ export const isAuthenticated = async (req, res, next) => {
         const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
         if (!token) {
             return res.status(401).json({
-                message: "User not authenticated",
+                message: "User session expired or not authenticated. Please log in.",
+                sessionExpired: true,
                 success: false,
             });
         }
@@ -13,7 +14,8 @@ export const isAuthenticated = async (req, res, next) => {
         const decode = jwt.verify(token, secretKey);
         if (!decode) {
             return res.status(401).json({
-                message: "Invalid token",
+                message: "Session expired or invalid token. Please log in again.",
+                sessionExpired: true,
                 success: false,
             });
         }
@@ -21,8 +23,12 @@ export const isAuthenticated = async (req, res, next) => {
         next();
     } catch (error) {
         console.error("Auth Middleware Error:", error.message);
+        const isExpired = error.name === "TokenExpiredError" || error.message?.includes("expired");
         return res.status(401).json({
-            message: "Authentication failed or token expired.",
+            message: isExpired
+                ? "Your session has expired. Please log in again to continue."
+                : "Authentication failed. Please log in again.",
+            sessionExpired: true,
             success: false,
         });
     }

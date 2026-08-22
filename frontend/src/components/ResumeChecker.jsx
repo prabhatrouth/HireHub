@@ -343,39 +343,100 @@ const ResumeChecker = () => {
                                         <FileCheck2 className="w-5 h-5 text-[#6A38C2]" />
                                         2. Resume Content
                                     </h2>
-                                    {user?.profile?.resumeOriginalName && (
-                                        <Badge variant="outline" className="text-[11px] bg-purple-50 text-purple-700 border-purple-200">
-                                            {user.profile.resumeOriginalName}
+                                    {uploadedFileName && (
+                                        <Badge variant="outline" className="text-[11px] bg-purple-50 text-purple-700 border-purple-200 truncate max-w-[170px]">
+                                            {uploadedFileName}
                                         </Badge>
                                     )}
                                 </div>
 
-                                {user && (
-                                    <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-xl flex items-center justify-between gap-3">
-                                        <div className="text-xs text-purple-900">
-                                            <span className="font-bold">Signed in as:</span> {user.fullname}
-                                            <p className="text-[11px] text-purple-700">
-                                                {user.profile?.skills?.length || 0} skills in profile
-                                            </p>
-                                        </div>
-                                        <Link to="/profile">
-                                            <Button variant="ghost" size="sm" className="text-xs text-[#6A38C2] hover:bg-purple-100 font-semibold h-7">
-                                                Edit Profile
-                                            </Button>
-                                        </Link>
+                                {/* Drag and Drop Resume Uploader */}
+                                <div
+                                    onDrop={handleDrop}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className={`cursor-pointer border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+                                        isDragging
+                                            ? 'border-[#6A38C2] bg-purple-50/80 scale-[1.01]'
+                                            : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50/20 bg-gray-50/50'
+                                    }`}
+                                >
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                                        accept=".pdf,.docx,.doc,.txt,.md"
+                                        className="hidden"
+                                    />
+                                    <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-purple-100 text-[#6A38C2] flex items-center justify-center shadow-xs">
+                                        <Upload className="w-5 h-5" />
                                     </div>
-                                )}
+                                    <p className="text-xs font-bold text-gray-800">
+                                        Click to browse or drag & drop resume file
+                                    </p>
+                                    <p className="text-[11px] text-gray-500 mt-0.5">
+                                        Supports PDF, DOCX, TXT & Markdown documents
+                                    </p>
+                                </div>
+
+                                {/* Quick Templates & Profile Actions */}
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    <span className="text-[11px] font-semibold text-gray-500 mr-1">Load sample:</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => loadSampleResume('fullstack')}
+                                        className="text-[11px] font-semibold px-2 py-1 bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-800 rounded-lg transition-colors"
+                                    >
+                                        Full Stack
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => loadSampleResume('frontend')}
+                                        className="text-[11px] font-semibold px-2 py-1 bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-800 rounded-lg transition-colors"
+                                    >
+                                        Frontend
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => loadSampleResume('entrylevel')}
+                                        className="text-[11px] font-semibold px-2 py-1 bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-800 rounded-lg transition-colors"
+                                    >
+                                        Student / Grad
+                                    </button>
+                                    {user && (
+                                        <button
+                                            type="button"
+                                            onClick={loadProfileResume}
+                                            className="text-[11px] font-semibold px-2 py-1 bg-purple-100 hover:bg-purple-200 text-[#6A38C2] rounded-lg transition-colors ml-auto"
+                                        >
+                                            Use My Profile
+                                        </button>
+                                    )}
+                                </div>
 
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-700 block mb-1.5">
-                                        Paste Resume Text, Experience, or Bio:
-                                    </label>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <label className="text-xs font-semibold text-gray-700 block">
+                                            Resume Text & Content:
+                                        </label>
+                                        {resumeText && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setResumeText(""); setUploadedFileName(""); }}
+                                                className="text-[11px] text-rose-500 hover:text-rose-700 font-semibold inline-flex items-center gap-1"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
                                     <textarea
-                                        rows={10}
+                                        rows={8}
                                         value={resumeText}
                                         onChange={(e) => setResumeText(e.target.value)}
                                         placeholder="Paste your resume sections, work experience, project descriptions, and technical skills here for in-depth ATS parsing..."
-                                        className="w-full text-xs font-mono bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        className="w-full text-xs font-mono bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
                                     />
                                     <p className="text-[11px] text-gray-500 mt-1">
                                         Tip: Include Work Experience bullets, Project summaries, and Tech Skills for the highest accuracy.
