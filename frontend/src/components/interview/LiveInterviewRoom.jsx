@@ -34,7 +34,12 @@ import {
     Briefcase,
     Building2,
     User,
-    ArrowRight
+    ArrowRight,
+    Shield,
+    Eye,
+    FileCheck,
+    UserCheck,
+    Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -72,7 +77,7 @@ output = reverse_words("HireHub AI Smart Interview Platform")
 print("Reversed Output:", output)
 `,
     react: `// React Functional Component
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 export default function UserCounter() {
   const [count, setCount] = useState(0);
@@ -88,7 +93,7 @@ export default function UserCounter() {
 }
 `,
     sql: `-- SQL Data Query
--- Find the top 3 highest spending candidates in the last 30 days
+-- Find top 3 highest spending candidates in last 30 days
 SELECT 
     user_id, 
     COUNT(application_id) AS total_applied,
@@ -120,7 +125,6 @@ const LiveInterviewRoom = () => {
     const [isVideoOn, setIsVideoOn] = useState(true);
     const [isScreenSharing, setIsScreenSharing] = useState(false);
     const [mediaError, setMediaError] = useState('');
-    const [isFullscreen, setIsFullscreen] = useState(false);
 
     const localVideoRef = useRef(null);
     const screenVideoRef = useRef(null);
@@ -130,9 +134,8 @@ const LiveInterviewRoom = () => {
     // Call Duration Timer
     const [secondsElapsed, setSecondsElapsed] = useState(0);
 
-    // UI Workspace Tabs: 'code' | 'scorecard' | 'ai' | 'chat'
+    // UI Workspace Tabs: 'code' | 'scorecard' | 'ai' | 'chat' | 'final_decision'
     const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('code');
-    const [sidebarOpen, setSidebarOpen] = useState(true);
 
     // Live Code Workspace
     const [selectedLanguage, setSelectedLanguage] = useState('javascript');
@@ -149,19 +152,44 @@ const LiveInterviewRoom = () => {
     const [aiQuestions, setAiQuestions] = useState([]);
     const [loadingAiQuestions, setLoadingAiQuestions] = useState(false);
 
-    // Recruiter Scorecard Form
+    // Evaluation & Scorecard Form
     const [technicalScore, setTechnicalScore] = useState(4);
     const [communicationScore, setCommunicationScore] = useState(4);
     const [problemSolvingScore, setProblemSolvingScore] = useState(4);
-    const [cultureFitScore, setCultureFitScore] = useState(4);
-    const [overallRating, setOverallRating] = useState(4);
-    const [hiringDecision, setHiringDecision] = useState('Hire');
-    const [interviewerFeedback, setInterviewerFeedback] = useState('');
-    const [advanceStatus, setAdvanceStatus] = useState('accepted');
+    const [systemDesignScore, setSystemDesignScore] = useState(4);
+    const [strengths, setStrengths] = useState('');
+    const [weaknesses, setWeaknesses] = useState('');
+    const [panelistRecommendation, setPanelistRecommendation] = useState('Hire');
+    const [detailedNotes, setDetailedNotes] = useState('');
     const [submittingEvaluation, setSubmittingEvaluation] = useState(false);
-    const [evaluationSaved, setEvaluationSaved] = useState(false);
+    const [reportSaved, setReportSaved] = useState(false);
 
-    const isRecruiter = user?.role === 'recruiter' || interview?.recruiter?._id === user?._id;
+    // Recruiter Final Decision Form
+    const [recruiterFinalDecision, setRecruiterFinalDecision] = useState('Hire');
+    const [recruiterFinalRemarks, setRecruiterFinalRemarks] = useState('');
+    const [submittingFinalDecision, setSubmittingFinalDecision] = useState(false);
+    const [finalDecisionSaved, setFinalDecisionSaved] = useState(false);
+
+    // Role checks
+    const isMasterRecruiter = user?.role === 'recruiter' && !user?.isSubUser;
+    const isSubUser = Boolean(user?.isSubUser);
+    const isRecruiter = user?.role === 'recruiter';
+
+    const isAssignedInterviewer = Boolean(
+        interview?.assignedInterviewer?.email?.toLowerCase() === user?.email?.toLowerCase() ||
+        String(interview?.assignedInterviewer?.userId) === String(user?._id)
+    );
+
+    const isRecruiterSelfConducted = Boolean(
+        interview?.interviewerType === 'recruiter' ||
+        !interview?.assignedInterviewer?.name ||
+        interview?.assignedInterviewer?.email === interview?.recruiter?.email
+    );
+
+    // Inspection Mode: Master recruiter observing an interview conducted by an assigned technical panelist
+    const isInspectionMode = Boolean(
+        isMasterRecruiter && interview?.interviewerType === 'assigned_panelist' && !isAssignedInterviewer
+    );
 
     // 1. Fetch Room Data
     const fetchRoomData = async () => {
@@ -175,13 +203,25 @@ const LiveInterviewRoom = () => {
                 if (data.sharedCode) setCode(data.sharedCode);
                 if (data.sharedLanguage) setSelectedLanguage(data.sharedLanguage);
                 if (data.chatMessages) setChatMessages(data.chatMessages);
-                if (data.evaluation?.hiringDecision && data.evaluation.hiringDecision !== 'Undecided') {
-                    setEvaluationSaved(true);
-                    setTechnicalScore(data.evaluation.technicalScore || 4);
-                    setCommunicationScore(data.evaluation.communicationScore || 4);
-                    setProblemSolvingScore(data.evaluation.problemSolvingScore || 4);
-                    setHiringDecision(data.evaluation.hiringDecision || 'Hire');
-                    setInterviewerFeedback(data.evaluation.interviewerFeedback || '');
+
+                // Populate panelist report
+                if (data.panelistReport?.isSubmitted) {
+                    setReportSaved(true);
+                    setTechnicalScore(data.panelistReport.technicalScore || 4);
+                    setProblemSolvingScore(data.panelistReport.problemSolvingScore || 4);
+                    setSystemDesignScore(data.panelistReport.systemDesignScore || 4);
+                    setCommunicationScore(data.panelistReport.communicationScore || 4);
+                    setStrengths(data.panelistReport.strengths || '');
+                    setWeaknesses(data.panelistReport.weaknesses || '');
+                    setPanelistRecommendation(data.panelistReport.panelistRecommendation || 'Hire');
+                    setDetailedNotes(data.panelistReport.detailedNotes || '');
+                }
+
+                // Populate recruiter final decision
+                if (data.recruiterFinalDecision?.isFinalized) {
+                    setFinalDecisionSaved(true);
+                    setRecruiterFinalDecision(data.recruiterFinalDecision.finalDecision || 'Hire');
+                    setRecruiterFinalRemarks(data.recruiterFinalDecision.finalRemarks || '');
                 }
             }
         } catch (error) {
@@ -196,7 +236,7 @@ const LiveInterviewRoom = () => {
         fetchRoomData();
     }, [roomId]);
 
-    // 2. Request Camera & Mic Media Streams ONLY when explicitly attending/joining
+    // 2. Request Camera & Mic Media Streams
     const requestMediaStreams = async (wantVideo = true, wantAudio = true) => {
         try {
             setMediaError('');
@@ -221,7 +261,7 @@ const LiveInterviewRoom = () => {
                 toast.success('Camera & Microphone connected successfully.');
             }
         } catch (err) {
-            console.warn('Camera/Mic permission access notice:', err.message);
+            console.warn('Camera/Mic access notice:', err.message);
             setIsVideoOn(false);
             setIsMicOn(false);
             setMediaError(
@@ -230,15 +270,27 @@ const LiveInterviewRoom = () => {
         }
     };
 
-    // Attend and join interview action (triggered only on user click)
+    // Attend and join interview action
     const handleAttendInterview = async (withVideo = true, withAudio = true) => {
         setIsJoining(true);
         await requestMediaStreams(withVideo, withAudio);
         setHasJoined(true);
         setIsJoining(false);
+
+        // If inspecting, log recruiter inspection
+        if (isInspectionMode) {
+            try {
+                axios.defaults.withCredentials = true;
+                await axios.post(`${INTERVIEW_API_END_POINT}/room/${roomId}/inspection`, {
+                    notes: `Lead Recruiter joined active session for live inspection.`,
+                });
+            } catch (e) {
+                // Ignore log errors
+            }
+        }
     };
 
-    // Sync stream to video element when room view is mounted
+    // Sync stream to video element when mounted
     useEffect(() => {
         if (hasJoined && localStreamRef.current && localVideoRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
@@ -257,7 +309,7 @@ const LiveInterviewRoom = () => {
         };
     }, []);
 
-    // 3. Meeting Timer
+    // Timer
     useEffect(() => {
         const timer = setInterval(() => {
             setSecondsElapsed((prev) => prev + 1);
@@ -265,7 +317,7 @@ const LiveInterviewRoom = () => {
         return () => clearInterval(timer);
     }, []);
 
-    // 4. Toggle Microphone
+    // Toggle Microphone
     const toggleMic = async () => {
         if (!localStreamRef.current) {
             await requestMediaStreams(isVideoOn, true);
@@ -281,7 +333,7 @@ const LiveInterviewRoom = () => {
         }
     };
 
-    // 5. Toggle Video
+    // Toggle Video
     const toggleVideo = async () => {
         if (!localStreamRef.current) {
             await requestMediaStreams(true, isMicOn);
@@ -297,10 +349,9 @@ const LiveInterviewRoom = () => {
         }
     };
 
-    // 6. Toggle Screen Sharing
+    // Toggle Screen Sharing
     const toggleScreenShare = async () => {
         if (isScreenSharing) {
-            // Stop sharing
             if (screenStreamRef.current) {
                 screenStreamRef.current.getTracks().forEach((track) => track.stop());
                 screenStreamRef.current = null;
@@ -308,7 +359,6 @@ const LiveInterviewRoom = () => {
             setIsScreenSharing(false);
             toast.info('Screen sharing stopped.');
         } else {
-            // Start sharing
             try {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
                     toast.error('Screen sharing is not supported on this browser.');
@@ -325,14 +375,12 @@ const LiveInterviewRoom = () => {
                 setIsScreenSharing(true);
                 toast.success('Screen sharing started!');
 
-                // When user clicks browser's native "Stop sharing" button
                 screenStream.getVideoTracks()[0].onended = () => {
                     setIsScreenSharing(false);
                     screenStreamRef.current = null;
                     toast.info('Screen sharing ended.');
                 };
             } catch (err) {
-                console.warn('Screen share cancelled or error:', err);
                 if (err.name !== 'NotAllowedError') {
                     toast.error('Could not start screen sharing: ' + err.message);
                 }
@@ -340,7 +388,7 @@ const LiveInterviewRoom = () => {
         }
     };
 
-    // 7. Update Meeting Live Status (Recruiter calls / starts call)
+    // Update Status
     const handleStatusChange = async (newStatus) => {
         try {
             axios.defaults.withCredentials = true;
@@ -357,10 +405,10 @@ const LiveInterviewRoom = () => {
         }
     };
 
-    // 8. Run Code in Sandbox Simulator
+    // Run Code
     const handleRunCode = () => {
         setIsRunningCode(true);
-        setConsoleOutput('Executing code...');
+        setConsoleOutput('Executing code in sandbox...');
         setTimeout(() => {
             try {
                 if (selectedLanguage === 'javascript') {
@@ -370,14 +418,13 @@ const LiveInterviewRoom = () => {
                         logs.push(args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
                     };
 
-                    // Execute inside safe function scope
                     const runFn = new Function(code);
                     runFn();
 
                     console.log = originalConsoleLog;
                     setConsoleOutput(
                         logs.length > 0
-                            ? logs.join('\n') + '\n\n✨ [Execution finished successfully with 0 errors]'
+                            ? logs.join('\n') + '\n\n✨ [Execution finished with 0 errors]'
                             : 'Code executed with return code 0 (no console output).'
                     );
                 } else if (selectedLanguage === 'python') {
@@ -386,12 +433,10 @@ const LiveInterviewRoom = () => {
                     );
                 } else if (selectedLanguage === 'sql') {
                     setConsoleOutput(
-                        `| user_id | total_applied | last_activity       |\n|---------|---------------|---------------------|\n| 64f1a2  | 14            | 2026-08-22 10:14:00 |\n| 64f9b8  | 9             | 2026-08-21 16:30:22 |\n| 64e3c1  | 6             | 2026-08-20 09:05:11 |\n\n(3 rows returned in 12ms)`
+                        `| user_id | total_applied | last_activity       |\n|---------|---------------|---------------------|\n| 64f1a2  | 14            | 2026-08-22 10:14:00 |\n| 64f9b8  | 9             | 2026-08-21 16:30:22 |\n\n(2 rows returned in 8ms)`
                     );
                 } else {
-                    setConsoleOutput(
-                        `[${selectedLanguage.toUpperCase()} Compilation]\nCompiled with 0 warnings.\nOutput:\nTest Suite Passed (3/3 Tests Passed).`
-                    );
+                    setConsoleOutput(`[${selectedLanguage.toUpperCase()} Compilation]\nCompiled with 0 warnings.`);
                 }
             } catch (err) {
                 setConsoleOutput(`❌ Runtime Error:\n${err.message}`);
@@ -401,7 +446,7 @@ const LiveInterviewRoom = () => {
         }, 400);
     };
 
-    // 9. Sync code to backend
+    // Sync code to room
     const syncCodeToRoom = async (newCode, newLang) => {
         try {
             axios.defaults.withCredentials = true;
@@ -410,17 +455,17 @@ const LiveInterviewRoom = () => {
                 sharedLanguage: newLang !== undefined ? newLang : selectedLanguage,
             });
         } catch (e) {
-            // Background sync
+            console.debug('Code sync debug:', e?.message);
         }
     };
 
-    // 10. Send Chat Message
+    // Send Chat
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!messageInput.trim()) return;
 
-        const senderName = user?.fullname || (isRecruiter ? 'Recruiter / Interviewer' : 'Candidate');
-        const senderRole = user?.role || (isRecruiter ? 'recruiter' : 'candidate');
+        const senderName = user?.fullname || (isRecruiter ? 'Interviewer' : 'Candidate');
+        const senderRole = isInspectionMode ? 'recruiter_inspector' : user?.role || 'candidate';
 
         const newMsg = {
             senderId: user?._id || 'local',
@@ -447,14 +492,14 @@ const LiveInterviewRoom = () => {
         }, 100);
     };
 
-    // 11. AI Interview Co-Pilot Questions
+    // AI Questions
     const fetchAiQuestions = async () => {
         setLoadingAiQuestions(true);
         try {
             axios.defaults.withCredentials = true;
             const res = await axios.post(`${INTERVIEW_API_END_POINT}/ai-questions`, {
-                jobTitle: interview?.job?.title || 'Full Stack Engineer',
-                skills: interview?.candidate?.profile?.skills || ['React', 'Node.js', 'MongoDB'],
+                jobTitle: interview?.job?.title || 'Software Engineer',
+                skills: interview?.candidate?.profile?.skills || ['React', 'Node.js'],
                 roundType: interview?.roundType || 'Technical Round',
             });
             if (res.data?.success) {
@@ -467,31 +512,61 @@ const LiveInterviewRoom = () => {
         }
     };
 
-    // 12. Submit Recruiter Scorecard
-    const handleSubmitEvaluation = async (e) => {
+    // Submit Panelist Report (Technical Interviewer or Recruiter Self)
+    const handleSubmitPanelistReport = async (e) => {
         e.preventDefault();
         setSubmittingEvaluation(true);
         try {
             axios.defaults.withCredentials = true;
             const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${roomId}/evaluate`, {
-                rating: overallRating,
                 technicalScore,
-                communicationScore,
                 problemSolvingScore,
-                cultureFitScore,
-                hiringDecision,
-                interviewerFeedback,
-                advanceApplicationStatus: advanceStatus,
+                systemDesignScore,
+                communicationScore,
+                strengths,
+                weaknesses,
+                panelistRecommendation,
+                detailedNotes,
+                isRecruiterDirectFinalize: isRecruiterSelfConducted || isMasterRecruiter,
+                finalDecision: panelistRecommendation === 'Strong Hire' ? 'Strong Hire' : panelistRecommendation === 'No Hire' ? 'Reject' : 'Hire',
             });
+
             if (res.data?.success) {
-                toast.success('Hiring evaluation & scorecard saved!');
-                setEvaluationSaved(true);
+                toast.success(res.data.message || 'Technical report submitted successfully!');
+                setReportSaved(true);
+                if (isRecruiterSelfConducted || isMasterRecruiter) {
+                    setFinalDecisionSaved(true);
+                }
                 setInterview((prev) => ({ ...prev, status: 'completed' }));
             }
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to save evaluation.');
+            toast.error(error.response?.data?.message || 'Failed to submit report.');
         } finally {
             setSubmittingEvaluation(false);
+        }
+    };
+
+    // Finalize Recruiter Decision
+    const handleFinalizeRecruiterDecision = async (e) => {
+        e.preventDefault();
+        setSubmittingFinalDecision(true);
+        try {
+            axios.defaults.withCredentials = true;
+            const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${roomId}/finalize-decision`, {
+                finalDecision: recruiterFinalDecision,
+                finalRemarks: recruiterFinalRemarks,
+                advanceApplicationStatus: recruiterFinalDecision === 'Hire' ? 'accepted' : recruiterFinalDecision === 'Reject' ? 'rejected' : 'shortlisted',
+            });
+
+            if (res.data?.success) {
+                toast.success(res.data.message || 'Final hiring decision confirmed!');
+                setFinalDecisionSaved(true);
+                setInterview((prev) => ({ ...prev, status: 'completed' }));
+            }
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to finalize decision.');
+        } finally {
+            setSubmittingFinalDecision(false);
         }
     };
 
@@ -523,10 +598,10 @@ const LiveInterviewRoom = () => {
     const candidate = interview?.candidate || {};
     const recruiter = interview?.recruiter || {};
     const job = interview?.job || {};
+    const assignedInterviewer = interview?.assignedInterviewer || {};
 
     // -------------------------------------------------------------
     // PRE-JOIN / ATTEND INTERVIEW LOBBY
-    // Camera & Microphone permissions are strictly asked only when clicking Attend!
     // -------------------------------------------------------------
     if (!hasJoined) {
         return (
@@ -556,6 +631,17 @@ const LiveInterviewRoom = () => {
                 {/* Main Lobby Content */}
                 <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center">
                     <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+                        {/* Inspection Mode Alert in Lobby */}
+                        {isInspectionMode && (
+                            <div className="bg-indigo-950/80 border border-indigo-500/50 rounded-2xl p-4 flex items-center gap-3 text-xs text-indigo-200">
+                                <Shield className="w-5 h-5 text-indigo-400 shrink-0" />
+                                <div>
+                                    <strong className="text-white block text-sm">Lead Recruiter Inspection Mode</strong>
+                                    You are joining as the supervisory recruiter to inspect this interview conducted by <strong>{assignedInterviewer.name || 'Assigned Technical Panelist'}</strong>.
+                                </div>
+                            </div>
+                        )}
+
                         {/* Top Badge & Title */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
                             <div>
@@ -598,10 +684,11 @@ const LiveInterviewRoom = () => {
                             <div className="space-y-4 bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5">
                                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                                     <Users className="w-4 h-4 text-purple-400" />
-                                    Interview Participants
+                                    Interview Participants & Roles
                                 </h3>
 
                                 <div className="space-y-3">
+                                    {/* Candidate */}
                                     <div className="flex items-center gap-3 p-3 bg-slate-900/60 rounded-xl border border-slate-800">
                                         <Avatar className="w-10 h-10 border border-purple-500/40">
                                             <AvatarImage src={candidate.profile?.profilePhoto} />
@@ -620,20 +707,23 @@ const LiveInterviewRoom = () => {
                                         </div>
                                     </div>
 
+                                    {/* Interviewer */}
                                     <div className="flex items-center gap-3 p-3 bg-slate-900/60 rounded-xl border border-slate-800">
                                         <Avatar className="w-10 h-10 border border-indigo-500/40">
                                             <AvatarFallback className="bg-indigo-950 text-indigo-200 font-bold">
-                                                {recruiter.fullname?.charAt(0) || 'R'}
+                                                {(assignedInterviewer.name || recruiter.fullname)?.charAt(0) || 'I'}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="truncate">
                                             <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                                                <span>{recruiter.fullname || 'Recruiter'}</span>
+                                                <span>{assignedInterviewer.name || recruiter.fullname || 'Interviewer'}</span>
                                                 <span className="text-[10px] bg-indigo-900/60 text-indigo-300 px-1.5 py-0.2 rounded font-semibold">
-                                                    Interviewer
+                                                    {assignedInterviewer.role || 'Panelist'}
                                                 </span>
                                             </div>
-                                            <p className="text-[11px] text-slate-400 truncate">{recruiter.email}</p>
+                                            <p className="text-[11px] text-slate-400 truncate">
+                                                {assignedInterviewer.email || recruiter.email}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -654,11 +744,10 @@ const LiveInterviewRoom = () => {
                                         Device & Entry Settings
                                     </h3>
 
-                                    {/* Permission Explanation */}
                                     <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl text-[11px] text-slate-300 flex items-start gap-2">
                                         <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                                         <p>
-                                            Camera and microphone permissions will be requested by your browser <strong className="text-white">only when you click &apos;Attend &amp; Join Interview Call&apos;</strong>.
+                                            Camera & mic will activate only after clicking <strong className="text-white">&apos;Attend Interview Call&apos;</strong>.
                                         </p>
                                     </div>
 
@@ -700,7 +789,7 @@ const LiveInterviewRoom = () => {
                                         className="w-full h-12 text-sm font-extrabold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/40 rounded-xl gap-2 transition-all"
                                     >
                                         <VideoIcon className="w-4 h-4" />
-                                        <span>{isJoining ? 'Connecting Devices...' : 'Attend & Join Interview Call'}</span>
+                                        <span>{isJoining ? 'Connecting...' : isInspectionMode ? 'Join Live Inspection' : 'Attend & Join Interview Call'}</span>
                                         <ArrowRight className="w-4 h-4" />
                                     </Button>
 
@@ -711,7 +800,7 @@ const LiveInterviewRoom = () => {
                                         disabled={isJoining}
                                         className="w-full h-9 text-xs font-semibold border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white rounded-xl"
                                     >
-                                        Join in Silent / Presentation Mode (No Camera)
+                                        Join in Silent / Presentation Mode
                                     </Button>
                                 </div>
                             </div>
@@ -722,8 +811,36 @@ const LiveInterviewRoom = () => {
         );
     }
 
+    // -------------------------------------------------------------
+    // LIVE ROOM STAGE
+    // -------------------------------------------------------------
     return (
         <div className="h-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden select-none font-sans">
+            {/* Live Recruiter Inspection Banner */}
+            {isInspectionMode && (
+                <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 border-b border-indigo-500/40 px-4 py-1.5 flex items-center justify-between text-xs font-semibold text-indigo-100 z-30">
+                    <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-indigo-300" />
+                        <span>
+                            <strong>Recruiter Oversight & Inspection Mode:</strong> Observing interview conducted by{' '}
+                            <span className="text-white font-bold">{assignedInterviewer.name} ({assignedInterviewer.role})</span>.
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-md font-mono">
+                            Oversight Logged
+                        </span>
+                        <Button
+                            size="sm"
+                            onClick={() => setActiveWorkspaceTab('scorecard')}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold h-6 px-2.5 rounded-lg"
+                        >
+                            Review & Finalize
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {/* Top Bar Header */}
             <header className="h-14 bg-slate-900/95 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 z-20">
                 <div className="flex items-center gap-3">
@@ -741,7 +858,7 @@ const LiveInterviewRoom = () => {
                                 {job.title || 'Live Interview'}
                             </h2>
                             {isLive ? (
-                                <Badge className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-extrabold animate-pulse px-2 py-0">
+                                <Badge className="bg-rose-500 text-white text-[10px] font-extrabold animate-pulse px-2 py-0">
                                     LIVE
                                 </Badge>
                             ) : (
@@ -751,11 +868,8 @@ const LiveInterviewRoom = () => {
                             )}
                         </div>
                         <p className="text-[11px] text-slate-400 truncate hidden md:block">
-                            {interview?.company?.name ? `${interview.company.name} • ` : ''}
-                            Candidate: {candidate.fullname || 'Applicant'} | Conducted By:{' '}
-                            {interview?.interviewerType === 'assigned_panelist' && interview?.assignedInterviewer?.name
-                                ? `${interview.assignedInterviewer.name} (${interview.assignedInterviewer.role || 'Panelist'})`
-                                : recruiter.fullname || 'Lead Recruiter'}
+                            Candidate: {candidate.fullname || 'Applicant'} | Panelist:{' '}
+                            {assignedInterviewer.name || recruiter.fullname || 'Interviewer'}
                         </p>
                     </div>
                 </div>
@@ -811,11 +925,10 @@ const LiveInterviewRoom = () => {
                 </div>
             </header>
 
-            {/* Main Stage Grid: Video Feed (Left) & Interactive Workspace (Right) */}
+            {/* Main Stage: Video Grid (Left) & Workspace (Right) */}
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-                {/* 1. Left Video Grid & Streams */}
+                {/* 1. Left Video Grid */}
                 <div className="w-full lg:w-[48%] xl:w-[45%] bg-slate-900/80 p-3 sm:p-4 flex flex-col justify-between overflow-y-auto border-r border-slate-800 gap-3">
-                    {/* Media Notice / Alert */}
                     {mediaError && (
                         <div className="p-2.5 bg-amber-950/60 border border-amber-800/80 rounded-xl text-xs text-amber-200 flex items-start gap-2">
                             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -823,7 +936,7 @@ const LiveInterviewRoom = () => {
                         </div>
                     )}
 
-                    {/* Active Screenshare Stream (If Active) */}
+                    {/* Active Screenshare */}
                     {isScreenSharing && (
                         <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-purple-500 shadow-lg">
                             <video
@@ -845,9 +958,9 @@ const LiveInterviewRoom = () => {
                         </div>
                     )}
 
-                    {/* Participant Video Boxes Grid */}
+                    {/* Video Boxes */}
                     <div className={`grid ${isScreenSharing ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'} gap-3 flex-1 min-h-[220px]`}>
-                        {/* Box 1: Local User (You) */}
+                        {/* Box 1: Local User */}
                         <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center group shadow-md aspect-video sm:aspect-auto">
                             {isVideoOn ? (
                                 <video
@@ -869,13 +982,11 @@ const LiveInterviewRoom = () => {
                                 </div>
                             )}
 
-                            {/* Participant Label */}
                             <div className="absolute bottom-2.5 left-2.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-2 text-[11px] font-semibold text-slate-200 shadow-md">
-                                <span>{user?.fullname || 'You'} (You - {isRecruiter ? 'Interviewer' : 'Candidate'})</span>
+                                <span>{user?.fullname || 'You'} ({isInspectionMode ? 'Inspector' : isRecruiter ? 'Interviewer' : 'Candidate'})</span>
                                 {!isMicOn && <MicOff className="w-3 h-3 text-rose-400" />}
                             </div>
 
-                            {/* Video Controls Shortcut */}
                             <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                     onClick={toggleMic}
@@ -892,17 +1003,17 @@ const LiveInterviewRoom = () => {
                             </div>
                         </div>
 
-                        {/* Box 2: Remote Peer (Interviewer / Candidate) */}
+                        {/* Box 2: Remote Peer */}
                         <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center shadow-md aspect-video sm:aspect-auto">
                             <div className="text-center p-4">
                                 <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto border-2 border-indigo-500/50 mb-2 shadow-lg">
                                     <AvatarImage src={isRecruiter ? candidate.profile?.profilePhoto : undefined} />
                                     <AvatarFallback className="bg-indigo-950 text-indigo-300 text-lg font-bold">
-                                        {(isRecruiter ? candidate.fullname : recruiter.fullname)?.charAt(0) || 'P'}
+                                        {(isRecruiter ? candidate.fullname : assignedInterviewer.name || recruiter.fullname)?.charAt(0) || 'P'}
                                     </AvatarFallback>
                                 </Avatar>
                                 <h4 className="text-xs font-bold text-slate-200">
-                                    {isRecruiter ? candidate.fullname || 'Candidate' : recruiter.fullname || 'Interviewer'}
+                                    {isRecruiter ? candidate.fullname || 'Candidate' : assignedInterviewer.name || recruiter.fullname || 'Interviewer'}
                                 </h4>
                                 <p className="text-[10px] text-emerald-400 flex items-center justify-center gap-1 mt-0.5 font-medium">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
@@ -910,56 +1021,44 @@ const LiveInterviewRoom = () => {
                                 </p>
                             </div>
 
-                            {/* Remote Participant Label */}
                             <div className="absolute bottom-2.5 left-2.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-[11px] font-semibold text-slate-200 shadow-md">
                                 <User className="w-3 h-3 text-indigo-400" />
-                                <span>{isRecruiter ? `Candidate (${candidate.fullname || 'Applicant'})` : `Recruiter (${recruiter.fullname || 'Interviewer'})`}</span>
+                                <span>{isRecruiter ? `Candidate (${candidate.fullname || 'Applicant'})` : `Panelist (${assignedInterviewer.name || recruiter.fullname})`}</span>
                             </div>
                         </div>
                     </div>
 
                     {/* Bottom Media Control Bar */}
                     <div className="p-3 bg-slate-950/90 border border-slate-800 rounded-2xl flex items-center justify-center gap-2 sm:gap-3 shrink-0 shadow-lg">
-                        {/* Mic */}
                         <Button
                             onClick={toggleMic}
-                            className={`rounded-xl px-3 sm:px-4 text-xs font-semibold h-10 gap-1.5 transition-colors ${
-                                isMicOn
-                                    ? 'bg-slate-800 hover:bg-slate-700 text-white'
-                                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
-                            }`}
+                            className={`rounded-xl px-3 sm:px-4 text-xs font-semibold h-10 gap-1.5 transition-colors ${isMicOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
+                                }`}
                         >
                             {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4 text-white" />}
                             <span className="hidden sm:inline">{isMicOn ? 'Mute' : 'Unmute'}</span>
                         </Button>
 
-                        {/* Video */}
                         <Button
                             onClick={toggleVideo}
-                            className={`rounded-xl px-3 sm:px-4 text-xs font-semibold h-10 gap-1.5 transition-colors ${
-                                isVideoOn
-                                    ? 'bg-slate-800 hover:bg-slate-700 text-white'
-                                    : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
-                            }`}
+                            className={`rounded-xl px-3 sm:px-4 text-xs font-semibold h-10 gap-1.5 transition-colors ${isVideoOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
+                                }`}
                         >
                             {isVideoOn ? <VideoIcon className="w-4 h-4" /> : <VideoOff className="w-4 h-4 text-white" />}
                             <span className="hidden sm:inline">{isVideoOn ? 'Stop Video' : 'Start Video'}</span>
                         </Button>
 
-                        {/* Screen Share (Key Feature) */}
                         <Button
                             onClick={toggleScreenShare}
-                            className={`rounded-xl px-3 sm:px-4 text-xs font-bold h-10 gap-1.5 transition-all ${
-                                isScreenSharing
-                                    ? 'bg-purple-600 hover:bg-purple-700 text-white ring-2 ring-purple-400 shadow-md animate-pulse'
-                                    : 'bg-slate-800 hover:bg-purple-900/50 hover:text-purple-300 text-white'
-                            }`}
+                            className={`rounded-xl px-3 sm:px-4 text-xs font-bold h-10 gap-1.5 transition-all ${isScreenSharing
+                                ? 'bg-purple-600 hover:bg-purple-700 text-white ring-2 ring-purple-400 shadow-md animate-pulse'
+                                : 'bg-slate-800 hover:bg-purple-900/50 hover:text-purple-300 text-white'
+                                }`}
                         >
                             {isScreenSharing ? <MonitorOff className="w-4 h-4" /> : <MonitorUp className="w-4 h-4 text-purple-400" />}
                             <span>{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
                         </Button>
 
-                        {/* End/Leave */}
                         <Button
                             onClick={() => navigate(isRecruiter ? '/admin/portal' : '/student/portal')}
                             className="rounded-xl px-3 sm:px-4 text-xs font-bold h-10 gap-1.5 bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
@@ -970,35 +1069,40 @@ const LiveInterviewRoom = () => {
                     </div>
                 </div>
 
-                {/* 2. Right Workspace Panel: Live Code Editor, Scorecard, AI Assistant, Chat */}
+                {/* 2. Right Workspace Panel */}
                 <div className="w-full lg:w-[52%] xl:w-[55%] bg-slate-900 flex flex-col overflow-hidden">
                     {/* Navigation Tabs Bar */}
                     <div className="h-12 bg-slate-950 border-b border-slate-800 px-3 flex items-center justify-between gap-2 shrink-0">
                         <div className="flex items-center gap-1 overflow-x-auto">
                             <button
                                 onClick={() => setActiveWorkspaceTab('code')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                                    activeWorkspaceTab === 'code'
-                                        ? 'bg-[#6A38C2] text-white shadow-xs'
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                                }`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeWorkspaceTab === 'code'
+                                    ? 'bg-[#6A38C2] text-white shadow-xs'
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                    }`}
                             >
                                 <Code2 className="w-3.5 h-3.5" />
                                 <span>Code Workspace</span>
                             </button>
 
+                            {/* Scorecard Tab for Panelists & Recruiter */}
                             {isRecruiter && (
                                 <button
                                     onClick={() => setActiveWorkspaceTab('scorecard')}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                                        activeWorkspaceTab === 'scorecard'
-                                            ? 'bg-[#6A38C2] text-white shadow-xs'
-                                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                                    }`}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeWorkspaceTab === 'scorecard'
+                                        ? 'bg-[#6A38C2] text-white shadow-xs'
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                        }`}
                                 >
                                     <Award className="w-3.5 h-3.5" />
-                                    <span>Hiring Scorecard</span>
-                                    {evaluationSaved && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                                    <span>
+                                        {isInspectionMode
+                                            ? 'Panelist Report & Finalize'
+                                            : isSubUser
+                                                ? 'Technical Scorecard'
+                                                : 'Hiring Scorecard'}
+                                    </span>
+                                    {reportSaved && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
                                 </button>
                             )}
 
@@ -1008,11 +1112,10 @@ const LiveInterviewRoom = () => {
                                         setActiveWorkspaceTab('ai');
                                         if (aiQuestions.length === 0) fetchAiQuestions();
                                     }}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                                        activeWorkspaceTab === 'ai'
-                                            ? 'bg-[#6A38C2] text-white shadow-xs'
-                                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                                    }`}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${activeWorkspaceTab === 'ai'
+                                        ? 'bg-[#6A38C2] text-white shadow-xs'
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                        }`}
                                 >
                                     <Sparkles className="w-3.5 h-3.5 text-purple-300" />
                                     <span>AI Co-Pilot</span>
@@ -1021,11 +1124,10 @@ const LiveInterviewRoom = () => {
 
                             <button
                                 onClick={() => setActiveWorkspaceTab('chat')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors relative ${
-                                    activeWorkspaceTab === 'chat'
-                                        ? 'bg-[#6A38C2] text-white shadow-xs'
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                                }`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors relative ${activeWorkspaceTab === 'chat'
+                                    ? 'bg-[#6A38C2] text-white shadow-xs'
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                    }`}
                             >
                                 <MessageSquare className="w-3.5 h-3.5" />
                                 <span>Chat</span>
@@ -1039,7 +1141,6 @@ const LiveInterviewRoom = () => {
                     {/* Tab 1: Code Workspace */}
                     {activeWorkspaceTab === 'code' && (
                         <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
-                            {/* Editor Controls Bar */}
                             <div className="h-10 bg-slate-950/90 border-b border-slate-800 px-3 flex items-center justify-between gap-3 shrink-0">
                                 <div className="flex items-center gap-2">
                                     <select
@@ -1052,7 +1153,7 @@ const LiveInterviewRoom = () => {
                                                 syncCodeToRoom(CODE_TEMPLATES[lang], lang);
                                             }
                                         }}
-                                        className="bg-slate-800 text-xs font-semibold text-slate-200 rounded-lg px-2.5 py-1 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        className="bg-slate-800 text-xs font-semibold text-slate-200 rounded-lg px-2.5 py-1 border border-slate-700 focus:outline-none"
                                     >
                                         <option value="javascript">JavaScript (Node.js)</option>
                                         <option value="python">Python 3</option>
@@ -1074,20 +1175,17 @@ const LiveInterviewRoom = () => {
                                     </button>
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        size="sm"
-                                        onClick={handleRunCode}
-                                        disabled={isRunningCode}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-7 px-3 shadow-xs gap-1"
-                                    >
-                                        <Play className="w-3 h-3 fill-current" />
-                                        <span>{isRunningCode ? 'Running...' : 'Run Code'}</span>
-                                    </Button>
-                                </div>
+                                <Button
+                                    size="sm"
+                                    onClick={handleRunCode}
+                                    disabled={isRunningCode}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-7 px-3 shadow-xs gap-1"
+                                >
+                                    <Play className="w-3 h-3 fill-current" />
+                                    <span>{isRunningCode ? 'Running...' : 'Run Code'}</span>
+                                </Button>
                             </div>
 
-                            {/* Code Area */}
                             <div className="flex-1 flex flex-col overflow-hidden">
                                 <textarea
                                     value={code}
@@ -1100,12 +1198,11 @@ const LiveInterviewRoom = () => {
                                     className="flex-1 w-full bg-slate-900 text-slate-100 font-mono text-xs sm:text-sm p-4 resize-none focus:outline-none leading-relaxed border-none selection:bg-purple-600/40"
                                 />
 
-                                {/* Interactive Console Output Bottom Sheet */}
                                 <div className="h-36 sm:h-44 bg-slate-950 border-t border-slate-800 flex flex-col shrink-0">
                                     <div className="h-7 bg-slate-900 border-b border-slate-800 px-3 flex items-center justify-between text-[11px] font-mono text-slate-400">
                                         <span className="flex items-center gap-1.5 font-bold text-slate-300">
                                             <Terminal className="w-3 h-3 text-purple-400" />
-                                            Terminal Execution Console
+                                            Execution Console
                                         </span>
                                         <button
                                             onClick={() => setConsoleOutput('Console output cleared.')}
@@ -1122,165 +1219,242 @@ const LiveInterviewRoom = () => {
                         </div>
                     )}
 
-                    {/* Tab 2: Recruiter Scorecard & Hiring Decision */}
+                    {/* Tab 2: Scorecard / Panelist Report / Recruiter Finalization */}
                     {activeWorkspaceTab === 'scorecard' && isRecruiter && (
                         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-900 text-slate-200 space-y-5">
-                            <div>
-                                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                                    <Award className="w-5 h-5 text-purple-400" />
-                                    Recruiter Hiring Evaluation & Scorecard
-                                </h3>
-                                <p className="text-xs text-slate-400 mt-0.5">
-                                    Assess the candidate across core rubrics and record your hiring recommendation.
-                                </p>
-                            </div>
-
-                            <form onSubmit={handleSubmitEvaluation} className="space-y-4">
-                                {/* Rating Sliders Grid */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-                                        <div className="flex justify-between text-xs font-bold">
-                                            <span>Technical Skill</span>
-                                            <span className="text-purple-400">{technicalScore} / 5</span>
+                            {/* If in Inspection Mode: Show Panelist Report Summary + Recruiter Final Decision Form */}
+                            {isInspectionMode ? (
+                                <div className="space-y-5">
+                                    <div className="bg-indigo-950/60 border border-indigo-500/40 rounded-2xl p-4 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-indigo-300">
+                                                Technical Panelist Report: {assignedInterviewer.name}
+                                            </span>
+                                            <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-400/40 text-[10px]">
+                                                {reportSaved ? 'Submitted by Panelist' : 'In Progress / Pending Submission'}
+                                            </Badge>
                                         </div>
-                                        <input
-                                            type="range"
-                                            min="1"
-                                            max="5"
-                                            value={technicalScore}
-                                            onChange={(e) => setTechnicalScore(Number(e.target.value))}
-                                            className="w-full accent-purple-500 cursor-pointer"
-                                        />
-                                    </div>
 
-                                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-                                        <div className="flex justify-between text-xs font-bold">
-                                            <span>Communication</span>
-                                            <span className="text-purple-400">{communicationScore} / 5</span>
+                                        <div className="grid grid-cols-4 gap-2 text-center text-xs font-bold pt-2 border-t border-indigo-900/60">
+                                            <div className="bg-slate-900 p-2 rounded-lg">Code: <span className="text-indigo-400">{technicalScore}/5</span></div>
+                                            <div className="bg-slate-900 p-2 rounded-lg">DSA: <span className="text-indigo-400">{problemSolvingScore}/5</span></div>
+                                            <div className="bg-slate-900 p-2 rounded-lg">Design: <span className="text-indigo-400">{systemDesignScore}/5</span></div>
+                                            <div className="bg-slate-900 p-2 rounded-lg">Comm: <span className="text-indigo-400">{communicationScore}/5</span></div>
                                         </div>
-                                        <input
-                                            type="range"
-                                            min="1"
-                                            max="5"
-                                            value={communicationScore}
-                                            onChange={(e) => setCommunicationScore(Number(e.target.value))}
-                                            className="w-full accent-purple-500 cursor-pointer"
-                                        />
-                                    </div>
 
-                                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-                                        <div className="flex justify-between text-xs font-bold">
-                                            <span>Problem Solving</span>
-                                            <span className="text-purple-400">{problemSolvingScore} / 5</span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min="1"
-                                            max="5"
-                                            value={problemSolvingScore}
-                                            onChange={(e) => setProblemSolvingScore(Number(e.target.value))}
-                                            className="w-full accent-purple-500 cursor-pointer"
-                                        />
-                                    </div>
-
-                                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-                                        <div className="flex justify-between text-xs font-bold">
-                                            <span>Culture & Team Fit</span>
-                                            <span className="text-purple-400">{cultureFitScore} / 5</span>
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min="1"
-                                            max="5"
-                                            value={cultureFitScore}
-                                            onChange={(e) => setCultureFitScore(Number(e.target.value))}
-                                            className="w-full accent-purple-500 cursor-pointer"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Hiring Decision Selection */}
-                                <div>
-                                    <label className="text-xs font-bold text-slate-300 block mb-2">
-                                        Final Hiring Recommendation:
-                                    </label>
-                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                                        {['Strong Hire', 'Hire', 'Leaning Hire', 'Leaning No Hire', 'No Hire'].map((rec) => (
-                                            <button
-                                                key={rec}
-                                                type="button"
-                                                onClick={() => setHiringDecision(rec)}
-                                                className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                                                    hiringDecision === rec
-                                                        ? rec.includes('Strong') || rec === 'Hire'
-                                                            ? 'bg-emerald-600 text-white border-emerald-500 ring-2 ring-emerald-400'
-                                                            : rec.includes('No')
-                                                            ? 'bg-rose-600 text-white border-rose-500 ring-2 ring-rose-400'
-                                                            : 'bg-amber-600 text-white border-amber-500 ring-2 ring-amber-400'
-                                                        : 'bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-300'
-                                                }`}
-                                            >
-                                                {rec}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Detailed Interviewer Feedback */}
-                                <div>
-                                    <label className="text-xs font-bold text-slate-300 block mb-1">
-                                        Interviewer Notes & Constructive Feedback:
-                                    </label>
-                                    <textarea
-                                        rows={4}
-                                        value={interviewerFeedback}
-                                        onChange={(e) => setInterviewerFeedback(e.target.value)}
-                                        placeholder="Note key strengths demonstrated in coding, architectural depth, code quality, and areas for improvement..."
-                                        className="w-full text-xs bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                                    />
-                                </div>
-
-                                {/* Update Application Pipeline */}
-                                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                    <div>
-                                        <span className="text-xs font-bold text-slate-200">Application Pipeline Status:</span>
-                                        <p className="text-[11px] text-slate-400">Automatically update candidate record in ATS</p>
-                                    </div>
-                                    <select
-                                        value={advanceStatus}
-                                        onChange={(e) => setAdvanceStatus(e.target.value)}
-                                        className="bg-slate-900 border border-slate-700 text-xs font-bold text-purple-300 rounded-lg px-3 py-1.5 focus:outline-none"
-                                    >
-                                        <option value="accepted">Mark Accepted / Advance</option>
-                                        <option value="pending">Keep In Review</option>
-                                        <option value="rejected">Mark Not Selected / Rejected</option>
-                                    </select>
-                                </div>
-
-                                <div className="flex items-center justify-end gap-3 pt-2">
-                                    <Button
-                                        type="submit"
-                                        disabled={submittingEvaluation}
-                                        className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-bold h-9 px-5 shadow-xs"
-                                    >
-                                        {submittingEvaluation ? (
-                                            <>
-                                                <Sparkles className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                                Saving Scorecard...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Check className="w-3.5 h-3.5 mr-1.5" />
-                                                Submit & Save Scorecard
-                                            </>
+                                        {detailedNotes && (
+                                            <p className="text-xs text-slate-300 italic pt-1">
+                                                "{detailedNotes}"
+                                            </p>
                                         )}
-                                    </Button>
+                                    </div>
+
+                                    {/* Authoritative Final Decision by Lead Recruiter */}
+                                    <form onSubmit={handleFinalizeRecruiterDecision} className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                                        <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                                            <Award className="w-4 h-4 text-purple-400" />
+                                            Lead Recruiter Authoritative Final Decision
+                                        </h4>
+                                        <p className="text-xs text-slate-400">
+                                            As the Master Recruiter, you make the binding decision for this candidate.
+                                        </p>
+
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                                                Final Decision:
+                                            </label>
+                                            <select
+                                                value={recruiterFinalDecision}
+                                                onChange={(e) => setRecruiterFinalDecision(e.target.value)}
+                                                className="w-full bg-slate-900 border border-purple-500/50 rounded-xl p-2.5 text-xs font-bold text-white focus:outline-none"
+                                            >
+                                                <option value="Hire">🎉 Hire Candidate (Extend Offer)</option>
+                                                <option value="Strong Hire">⭐ Strong Hire (High Priority Top Tier)</option>
+                                                <option value="Advance to Next Round">⏩ Advance to Next Round</option>
+                                                <option value="On Hold">⏸️ On Hold</option>
+                                                <option value="Reject">❌ Reject Application</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-300 block mb-1">
+                                                Executive Sign-off Remarks:
+                                            </label>
+                                            <textarea
+                                                rows={3}
+                                                value={recruiterFinalRemarks}
+                                                onChange={(e) => setRecruiterFinalRemarks(e.target.value)}
+                                                placeholder="Remarks on overall quality, compensation tier, and final decision approval..."
+                                                className="w-full text-xs bg-slate-900 border border-slate-800 rounded-xl p-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                            />
+                                        </div>
+
+                                        <Button
+                                            type="submit"
+                                            disabled={submittingFinalDecision}
+                                            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs h-10 rounded-xl shadow-md"
+                                        >
+                                            {submittingFinalDecision ? 'Recording Decision...' : 'Confirm Authoritative Final Decision'}
+                                        </Button>
+                                    </form>
                                 </div>
-                            </form>
+                            ) : (
+                                /* Technical Panelist / Recruiter Evaluation Form */
+                                <div>
+                                    <div className="mb-4">
+                                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                            <Award className="w-5 h-5 text-purple-400" />
+                                            {isSubUser ? 'Technical Panelist Scorecard & Report' : 'Recruiter Hiring Evaluation & Scorecard'}
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mt-0.5">
+                                            {isSubUser
+                                                ? 'Rate the candidate and submit your scorecard to the Lead Recruiter for final decision.'
+                                                : 'Assess candidate across rubrics and confirm final hiring sign-off.'}
+                                        </p>
+                                    </div>
+
+                                    <form onSubmit={handleSubmitPanelistReport} className="space-y-4">
+                                        {/* Sliders Grid */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span>Code</span>
+                                                    <span className="text-purple-400">{technicalScore} / 5</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="5"
+                                                    value={technicalScore}
+                                                    onChange={(e) => setTechnicalScore(Number(e.target.value))}
+                                                    className="w-full accent-purple-500"
+                                                />
+                                            </div>
+
+                                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span>DSA</span>
+                                                    <span className="text-purple-400">{problemSolvingScore} / 5</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="5"
+                                                    value={problemSolvingScore}
+                                                    onChange={(e) => setProblemSolvingScore(Number(e.target.value))}
+                                                    className="w-full accent-purple-500"
+                                                />
+                                            </div>
+
+                                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span>Design</span>
+                                                    <span className="text-purple-400">{systemDesignScore} / 5</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="5"
+                                                    value={systemDesignScore}
+                                                    onChange={(e) => setSystemDesignScore(Number(e.target.value))}
+                                                    className="w-full accent-purple-500"
+                                                />
+                                            </div>
+
+                                            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span>Comm</span>
+                                                    <span className="text-purple-400">{communicationScore} / 5</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="5"
+                                                    value={communicationScore}
+                                                    onChange={(e) => setCommunicationScore(Number(e.target.value))}
+                                                    className="w-full accent-purple-500"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Recommendation */}
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-300 block mb-2">
+                                                {isSubUser ? 'Panelist Recommendation:' : 'Hiring Recommendation:'}
+                                            </label>
+                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                                {['Strong Hire', 'Hire', 'Advance to Next Round', 'Leaning No Hire', 'No Hire'].map((rec) => (
+                                                    <button
+                                                        key={rec}
+                                                        type="button"
+                                                        onClick={() => setPanelistRecommendation(rec)}
+                                                        className={`p-2 rounded-xl border text-xs font-bold transition-all ${panelistRecommendation === rec
+                                                            ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-400'
+                                                            : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        {rec}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-300 block mb-1">Key Strengths:</label>
+                                                <input
+                                                    type="text"
+                                                    value={strengths}
+                                                    onChange={(e) => setStrengths(e.target.value)}
+                                                    placeholder="Clean abstractions, optimal time complexity"
+                                                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-300 block mb-1">Areas for Growth:</label>
+                                                <input
+                                                    type="text"
+                                                    value={weaknesses}
+                                                    onChange={(e) => setWeaknesses(e.target.value)}
+                                                    placeholder="Edge case testing"
+                                                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-100"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-300 block mb-1">
+                                                Detailed Notes & Code Review Summary:
+                                            </label>
+                                            <textarea
+                                                rows={4}
+                                                value={detailedNotes}
+                                                onChange={(e) => setDetailedNotes(e.target.value)}
+                                                placeholder="Summary of architectural depth, coding speed, and panelist feedback for recruiter..."
+                                                className="w-full text-xs bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                            />
+                                        </div>
+
+                                        <div className="flex justify-end pt-2">
+                                            <Button
+                                                type="submit"
+                                                disabled={submittingEvaluation}
+                                                className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-bold h-10 px-6 rounded-xl shadow-md"
+                                            >
+                                                {submittingEvaluation
+                                                    ? 'Submitting...'
+                                                    : isSubUser
+                                                        ? 'Submit Report to Recruiter'
+                                                        : 'Save Scorecard & Finalize'}
+                                            </Button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* Tab 3: AI Interview Co-Pilot */}
+                    {/* Tab 3: AI Co-Pilot */}
                     {activeWorkspaceTab === 'ai' && isRecruiter && (
                         <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-slate-900 text-slate-200 space-y-4">
                             <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-800">
@@ -1290,7 +1464,7 @@ const LiveInterviewRoom = () => {
                                         AI Live Question Assistant
                                     </h3>
                                     <p className="text-xs text-slate-400">
-                                        Targeted questions crafted for {job.title || 'this role'}
+                                        Tailored questions crafted for {job.title || 'this role'}
                                     </p>
                                 </div>
                                 <Button
@@ -1315,7 +1489,7 @@ const LiveInterviewRoom = () => {
                                     {aiQuestions.map((q, idx) => (
                                         <div
                                             key={idx}
-                                            className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2 hover:border-purple-500/50 transition-colors"
+                                            className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2"
                                         >
                                             <div className="flex items-center justify-between gap-2">
                                                 <Badge className="bg-purple-900/60 text-purple-300 border-purple-700 text-[10px]">
@@ -1342,7 +1516,7 @@ const LiveInterviewRoom = () => {
                                                     onClick={() => {
                                                         setMessageInput(q.question);
                                                         setActiveWorkspaceTab('chat');
-                                                        toast.success('Question placed into in-room chat!');
+                                                        toast.success('Question pasted to in-room chat!');
                                                     }}
                                                     className="text-[11px] text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1"
                                                 >
@@ -1357,37 +1531,32 @@ const LiveInterviewRoom = () => {
                         </div>
                     )}
 
-                    {/* Tab 4: In-Room Chat */}
+                    {/* Tab 4: Chat */}
                     {activeWorkspaceTab === 'chat' && (
                         <div className="flex-1 flex flex-col overflow-hidden bg-slate-900">
-                            {/* Messages Stream */}
                             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                                 {chatMessages.length === 0 ? (
-                                    <div className="py-12 text-center text-slate-500 text-xs">
-                                        <MessageSquare className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-                                        <p>No messages yet in this interview session.</p>
-                                        <p className="text-[11px] text-slate-600 mt-0.5">
-                                            Send code snippets, documentation links, or chat messages below.
-                                        </p>
+                                    <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
+                                        <MessageSquare className="w-8 h-8 mb-2 opacity-50 text-purple-400" />
+                                        <p className="text-xs font-semibold">No messages in room yet</p>
+                                        <p className="text-[11px] text-slate-600 mt-0.5">Share links, code snippets, or clarifying notes</p>
                                     </div>
                                 ) : (
                                     chatMessages.map((msg, idx) => {
-                                        const isMe = msg.senderId === user?._id;
+                                        const isMe = msg.senderId === user?._id || msg.senderRole === user?.role;
                                         return (
                                             <div
                                                 key={idx}
                                                 className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                                             >
-                                                <div className="flex items-center gap-1.5 mb-0.5 text-[10px] text-slate-400">
-                                                    <span className="font-bold text-slate-300">{msg.senderName}</span>
-                                                    <span>({msg.senderRole})</span>
-                                                </div>
+                                                <span className="text-[10px] text-slate-500 mb-1 px-1 font-semibold">
+                                                    {msg.senderName} ({msg.senderRole})
+                                                </span>
                                                 <div
-                                                    className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
-                                                        isMe
-                                                            ? 'bg-[#6A38C2] text-white rounded-tr-xs'
-                                                            : 'bg-slate-800 text-slate-100 rounded-tl-xs border border-slate-700/60'
-                                                    }`}
+                                                    className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${isMe
+                                                        ? 'bg-purple-600 text-white rounded-br-none'
+                                                        : 'bg-slate-800 text-slate-100 rounded-bl-none border border-slate-700'
+                                                        }`}
                                                 >
                                                     {msg.text}
                                                 </div>
@@ -1398,23 +1567,18 @@ const LiveInterviewRoom = () => {
                                 <div ref={chatBottomRef} />
                             </div>
 
-                            {/* Input Field */}
-                            <form
-                                onSubmit={handleSendMessage}
-                                className="h-14 bg-slate-950 border-t border-slate-800 p-2.5 flex items-center gap-2 shrink-0"
-                            >
+                            <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
                                 <Input
                                     value={messageInput}
                                     onChange={(e) => setMessageInput(e.target.value)}
-                                    placeholder="Type a message or code snippet..."
-                                    className="bg-slate-900 border-slate-800 text-xs text-white rounded-xl focus-visible:ring-purple-500 h-9"
+                                    placeholder="Type a message or paste code..."
+                                    className="h-10 bg-slate-900 border-slate-800 text-xs text-white rounded-xl"
                                 />
                                 <Button
                                     type="submit"
-                                    disabled={!messageInput.trim()}
-                                    className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-bold h-9 px-3.5 rounded-xl shadow-xs"
+                                    className="bg-purple-600 hover:bg-purple-700 text-white h-10 w-10 p-0 rounded-xl shrink-0"
                                 >
-                                    <Send className="w-3.5 h-3.5" />
+                                    <Send className="w-4 h-4" />
                                 </Button>
                             </form>
                         </div>

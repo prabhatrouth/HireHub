@@ -30,7 +30,10 @@ import {
     SlidersHorizontal,
     ThumbsUp,
     ThumbsDown,
-    FileCheck
+    FileCheck,
+    Eye,
+    CheckSquare,
+    Layers
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -44,23 +47,42 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
     const navigate = useNavigate();
     const [interviews, setInterviews] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [activeFilter, setActiveFilter] = useState('ALL'); // ALL, UPCOMING, LIVE, COMPLETED
+    const [activeFilter, setActiveFilter] = useState('ALL'); // ALL, UPCOMING, LIVE, COMPLETED, PENDING_REVIEW
 
     // Modal state for viewing evaluation scorecard
     const [selectedScorecardInterview, setSelectedScorecardInterview] = useState(null);
 
-    // Modal state for marking interview complete / submitting evaluation
+    // Modal state for technical panelist submitting scorecard / report
     const [evaluatingInterview, setEvaluatingInterview] = useState(null);
     const [evalSubmitting, setEvalSubmitting] = useState(false);
     const [evalForm, setEvalForm] = useState({
         technicalScore: 4,
         problemSolvingScore: 4,
         communicationScore: 5,
+        systemDesignScore: 4,
         cultureFitScore: 4,
-        hiringDecision: 'Hire',
-        interviewerFeedback: '',
-        advanceApplicationStatus: 'accepted',
+        overallRating: 4,
+        strengths: '',
+        weaknesses: '',
+        keyHighlights: '',
+        codeQualitySummary: '',
+        panelistRecommendation: 'Hire',
+        detailedNotes: '',
     });
+
+    // Modal state for Master Recruiter reviewing panelist report & finalizing hiring decision
+    const [finalizingInterview, setFinalizingInterview] = useState(null);
+    const [finalizingSubmitting, setFinalizingSubmitting] = useState(false);
+    const [finalForm, setFinalForm] = useState({
+        finalDecision: 'Hire',
+        finalRemarks: '',
+        advanceApplicationStatus: 'accepted',
+        scheduleNextRound: false,
+        nextRoundType: 'Executive Founder Round',
+    });
+
+    const isRecruiter = user?.role === 'recruiter';
+    const isSubUser = user?.isSubUser;
 
     const fetchInterviews = async () => {
         setLoading(true);
@@ -79,7 +101,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
 
     useEffect(() => {
         fetchInterviews();
-        const interval = setInterval(fetchInterviews, 30000);
+        const interval = setInterval(fetchInterviews, 25000);
         return () => clearInterval(interval);
     }, []);
 
@@ -95,21 +117,28 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
         return dateStr === todayStr;
     };
 
-    const isRecruiter = user?.role === 'recruiter';
-
+    // Open technical evaluation modal
     const handleOpenEvaluateModal = (item) => {
         setEvaluatingInterview(item);
+        const rep = item.panelistReport || {};
+        const ev = item.evaluation || {};
         setEvalForm({
-            technicalScore: item.evaluation?.technicalScore || 4,
-            problemSolvingScore: item.evaluation?.problemSolvingScore || 4,
-            communicationScore: item.evaluation?.communicationScore || 5,
-            cultureFitScore: item.evaluation?.cultureFitScore || 4,
-            hiringDecision: item.evaluation?.hiringDecision || 'Hire',
-            interviewerFeedback: item.evaluation?.interviewerFeedback || '',
-            advanceApplicationStatus: 'accepted',
+            technicalScore: rep.technicalScore || ev.technicalScore || 4,
+            problemSolvingScore: rep.problemSolvingScore || ev.problemSolvingScore || 4,
+            communicationScore: rep.communicationScore || ev.communicationScore || 5,
+            systemDesignScore: rep.systemDesignScore || 4,
+            cultureFitScore: ev.cultureFitScore || 4,
+            overallRating: rep.overallRating || ev.rating || 4,
+            strengths: rep.strengths || '',
+            weaknesses: rep.weaknesses || '',
+            keyHighlights: rep.keyHighlights || '',
+            codeQualitySummary: rep.codeQualitySummary || '',
+            panelistRecommendation: rep.panelistRecommendation || ev.hiringDecision || 'Hire',
+            detailedNotes: rep.detailedNotes || ev.interviewerFeedback || '',
         });
     };
 
+    // Submit technical panelist report
     const handleSubmitEvaluation = async (e) => {
         e.preventDefault();
         if (!evaluatingInterview) return;
@@ -117,18 +146,26 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
         setEvalSubmitting(true);
         try {
             axios.defaults.withCredentials = true;
+            const isRecruiterSelf = evaluatingInterview.interviewerType === 'recruiter' || (!isSubUser && isRecruiter);
+
             const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${evaluatingInterview.roomId}/evaluate`, {
                 technicalScore: Number(evalForm.technicalScore),
                 problemSolvingScore: Number(evalForm.problemSolvingScore),
                 communicationScore: Number(evalForm.communicationScore),
+                systemDesignScore: Number(evalForm.systemDesignScore),
                 cultureFitScore: Number(evalForm.cultureFitScore),
-                hiringDecision: evalForm.hiringDecision,
-                interviewerFeedback: evalForm.interviewerFeedback,
-                advanceApplicationStatus: evalForm.advanceApplicationStatus,
+                overallRating: Number(evalForm.overallRating),
+                strengths: evalForm.strengths,
+                weaknesses: evalForm.weaknesses,
+                keyHighlights: evalForm.keyHighlights,
+                codeQualitySummary: evalForm.codeQualitySummary,
+                panelistRecommendation: evalForm.panelistRecommendation,
+                detailedNotes: evalForm.detailedNotes,
+                isRecruiterDirectFinalize: isRecruiterSelf,
             });
 
             if (res.data?.success) {
-                toast.success('Interview marked as Completed and Scorecard recorded!');
+                toast.success(res.data.message || 'Report submitted successfully!');
                 setEvaluatingInterview(null);
                 fetchInterviews();
             }
@@ -140,598 +177,637 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
         }
     };
 
-    const copyScorecardSummary = (item) => {
-        const evalData = item.evaluation || {};
-        const interviewerName = item.interviewerType === 'assigned_panelist' && item.assignedInterviewer?.name
-            ? `${item.assignedInterviewer.name} (${item.assignedInterviewer.role || 'Panelist'})`
-            : item.recruiter?.fullname || 'Lead Recruiter';
+    // Open Recruiter Final Decision Modal
+    const handleOpenFinalizeModal = (item) => {
+        setFinalizingInterview(item);
+        const report = item.panelistReport || {};
+        const rec = report.panelistRecommendation;
+        const defaultDecision = ['Strong Hire', 'Hire'].includes(rec) ? 'Hire' : ['No Hire', 'Leaning No Hire'].includes(rec) ? 'Reject' : 'Advance to Next Round';
 
-        const summaryText = `--- HIREHUB INTERVIEW SCORECARD ---
-Candidate: ${item.candidate?.fullname} (${item.candidate?.email})
-Position: ${item.job?.title}
-Interview Date: ${item.interviewDate} at ${item.interviewTime}
-Round: ${item.roundType}
-Conducted By: ${interviewerName}
-
-SCORES:
-- Technical Architecture: ${evalData.technicalScore || 0}/5
-- Problem Solving & DSA: ${evalData.problemSolvingScore || 0}/5
-- Communication & Clarity: ${evalData.communicationScore || 0}/5
-- Cultural & Team Fit: ${evalData.cultureFitScore || 0}/5
-- Overall Rating: ${evalData.rating || 0}/5
-
-HIRING RECOMMENDATION: ${evalData.hiringDecision || 'Undecided'}
-FEEDBACK / REMARKS:
-${evalData.interviewerFeedback || 'No additional notes provided.'}
-------------------------------------`;
-
-        navigator.clipboard.writeText(summaryText);
-        toast.success('Scorecard summary copied to clipboard!');
+        setFinalForm({
+            finalDecision: item.recruiterFinalDecision?.finalDecision || defaultDecision,
+            finalRemarks: item.recruiterFinalDecision?.finalRemarks || '',
+            advanceApplicationStatus: defaultDecision === 'Hire' ? 'accepted' : defaultDecision === 'Reject' ? 'rejected' : 'shortlisted',
+            scheduleNextRound: Boolean(item.recruiterFinalDecision?.nextRoundScheduled),
+            nextRoundType: item.recruiterFinalDecision?.nextRoundType || 'Executive Founder Round',
+        });
     };
 
-    const handlePrintScorecard = () => {
-        window.print();
+    // Submit Recruiter Final Decision
+    const handleFinalizeRecruiterDecision = async (e) => {
+        e.preventDefault();
+        if (!finalizingInterview) return;
+
+        setFinalizingSubmitting(true);
+        try {
+            axios.defaults.withCredentials = true;
+            const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${finalizingInterview.roomId}/finalize-decision`, {
+                finalDecision: finalForm.finalDecision,
+                finalRemarks: finalForm.finalRemarks,
+                advanceApplicationStatus: finalForm.advanceApplicationStatus,
+                scheduleNextRound: finalForm.scheduleNextRound,
+                nextRoundType: finalForm.nextRoundType,
+            });
+
+            if (res.data?.success) {
+                toast.success(res.data.message || 'Hiring decision finalized!');
+                setFinalizingInterview(null);
+                fetchInterviews();
+            }
+        } catch (error) {
+            console.error('Finalize decision error:', error);
+            toast.error(error.response?.data?.message || 'Failed to finalize decision.');
+        } finally {
+            setFinalizingSubmitting(false);
+        }
     };
 
+    // Filter interviews
     const filteredInterviews = interviews.filter((item) => {
-        if (activeFilter === 'LIVE') return item.status === 'live';
+        if (activeFilter === 'ALL') return true;
         if (activeFilter === 'UPCOMING') return item.status === 'scheduled';
+        if (activeFilter === 'LIVE') return item.status === 'live' || isToday(item.interviewDate);
+        if (activeFilter === 'PENDING_REVIEW') {
+            return item.status === 'completed' && item.panelistReport?.isSubmitted && !item.recruiterFinalDecision?.isFinalized;
+        }
         if (activeFilter === 'COMPLETED') return item.status === 'completed';
         return true;
     });
 
-    if (loading && interviews.length === 0) {
-        return (
-            <div className="py-12 text-center bg-white rounded-2xl border border-gray-200/80 p-8 shadow-xs">
-                <RefreshCw className="w-8 h-8 text-[#6A38C2] animate-spin mx-auto mb-3" />
-                <p className="text-xs font-semibold text-gray-700">Loading scheduled interview calls...</p>
-            </div>
-        );
-    }
-
-    if (interviews.length === 0) {
-        return (
-            <div className="py-12 px-4 text-center rounded-2xl bg-gray-50/70 border border-gray-200/70">
-                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-[#6A38C2] flex items-center justify-center mx-auto mb-3 shadow-xs">
-                    <Video className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm font-bold text-gray-900">
-                    {isRecruiter ? 'No interviews scheduled yet' : 'No upcoming live interviews'}
-                </h3>
-                <p className="text-xs text-gray-500 max-w-md mx-auto mt-1 leading-relaxed">
-                    {isRecruiter
-                        ? 'Select candidates from your Job Applicants pool and click "Schedule Live Interview" to set up video rounds with screen sharing.'
-                        : 'When recruiters shortlist your application and invite you for screening or technical rounds, your live interview sessions will appear here.'}
-                </p>
-                <div className="mt-4 flex items-center justify-center gap-2.5">
-                    {isRecruiter ? (
-                        <Link to="/admin/jobs">
-                            <Button size="sm" className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-semibold px-4 shadow-xs">
-                                <User className="w-3.5 h-3.5 mr-1.5" />
-                                View Applicants & Schedule
-                            </Button>
-                        </Link>
-                    ) : (
-                        <Link to="/jobs">
-                            <Button size="sm" className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-semibold px-4 shadow-xs">
-                                <Briefcase className="w-3.5 h-3.5 mr-1.5" />
-                                Browse & Apply to Jobs
-                            </Button>
-                        </Link>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-4">
-            {/* Header & Filter Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-700">Filter Status:</span>
-                    <div className="flex items-center gap-1">
-                        {['ALL', 'UPCOMING', 'LIVE', 'COMPLETED'].map((filterKey) => (
+        <div className="space-y-6">
+            {/* Top filter tabs & Stats */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {[
+                        { key: 'ALL', label: 'All Interviews', count: interviews.length },
+                        { key: 'UPCOMING', label: 'Upcoming', count: interviews.filter((i) => i.status === 'scheduled').length },
+                        { key: 'LIVE', label: 'Today / Live', count: interviews.filter((i) => i.status === 'live' || isToday(i.interviewDate)).length },
+                        {
+                            key: 'PENDING_REVIEW',
+                            label: 'Pending Recruiter Review',
+                            count: interviews.filter((i) => i.status === 'completed' && i.panelistReport?.isSubmitted && !i.recruiterFinalDecision?.isFinalized).length,
+                            hideForStudent: true,
+                        },
+                        { key: 'COMPLETED', label: 'Completed', count: interviews.filter((i) => i.status === 'completed').length },
+                    ]
+                        .filter((tab) => !(isRecruiter === false && tab.hideForStudent))
+                        .map((tab) => (
                             <button
-                                key={filterKey}
-                                onClick={() => setActiveFilter(filterKey)}
-                                className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                                    activeFilter === filterKey
-                                        ? 'bg-[#6A38C2] text-white shadow-2xs'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
+                                key={tab.key}
+                                onClick={() => setActiveFilter(tab.key)}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeFilter === tab.key
+                                    ? 'bg-[#6A38C2] text-white shadow-xs'
+                                    : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
+                                    }`}
                             >
-                                {filterKey === 'ALL'
-                                    ? `All (${interviews.length})`
-                                    : filterKey === 'UPCOMING'
-                                    ? `Upcoming (${interviews.filter((i) => i.status === 'scheduled').length})`
-                                    : filterKey === 'LIVE'
-                                    ? `🔴 Live Now (${interviews.filter((i) => i.status === 'live').length})`
-                                    : `Completed (${interviews.filter((i) => i.status === 'completed').length})`}
+                                {tab.label}
+                                <span
+                                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${activeFilter === tab.key ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                                        }`}
+                                >
+                                    {tab.count}
+                                </span>
                             </button>
                         ))}
-                    </div>
                 </div>
 
-                <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={fetchInterviews}
-                    className="text-xs font-semibold border-gray-200 text-gray-700 h-8 self-end sm:self-auto gap-1"
-                >
-                    <RefreshCw className="w-3 h-3" />
-                    Refresh
-                </Button>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchInterviews}
+                        className="text-xs h-9 rounded-xl border-slate-200 text-slate-600 gap-1"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
-            {/* List of Interview Cards */}
-            <div className="space-y-3.5">
-                {filteredInterviews.map((item) => {
-                    const isLive = item.status === 'live';
-                    const isCompleted = item.status === 'completed';
-                    const isTodaySession = isToday(item.interviewDate);
-                    const partner = isRecruiter ? item.candidate : item.recruiter;
+            {/* Interviews List */}
+            {loading && interviews.length === 0 ? (
+                <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs">
+                    <Sparkles className="w-8 h-8 text-[#6A38C2] animate-spin mx-auto mb-3" />
+                    <p className="text-sm font-bold text-slate-700">Loading scheduled interviews & rooms...</p>
+                </div>
+            ) : filteredInterviews.length === 0 ? (
+                <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs">
+                    <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                    <h3 className="text-base font-bold text-slate-900">No interviews match this filter</h3>
+                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                        {isRecruiter
+                            ? isSubUser
+                                ? 'No interviews currently assigned to your profile.'
+                                : 'Schedule interviews directly from Job Applicants, or delegate to your technical team.'
+                            : 'When recruiters schedule an interview with you, it will appear here.'}
+                    </p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-4">
+                    {filteredInterviews.map((item) => {
+                        const isLiveToday = isToday(item.interviewDate);
+                        const isCompleted = item.status === 'completed';
+                        const isLiveNow = item.status === 'live';
+                        const report = item.panelistReport || {};
+                        const decision = item.recruiterFinalDecision || {};
+                        const isAssignedToOther = item.interviewerType === 'assigned_panelist';
+                        const panelistName = item.assignedInterviewer?.name || 'Technical Interviewer';
 
-                    // Interviewer attribution
-                    const isAssigned = item.interviewerType === 'assigned_panelist' && item.assignedInterviewer?.name;
-                    const interviewerDisplay = isAssigned
-                        ? `${item.assignedInterviewer.name} (${item.assignedInterviewer.role || 'Panelist'})`
-                        : isRecruiter
-                        ? 'Myself (Lead Recruiter)'
-                        : item.recruiter?.fullname || 'Hiring Team';
-
-                    return (
-                        <div
-                            key={item._id}
-                            className={`p-4 sm:p-5 rounded-2xl border transition-all relative ${
-                                isLive
-                                    ? 'bg-gradient-to-r from-purple-50/90 via-indigo-50/50 to-purple-50/90 border-[#6A38C2] ring-2 ring-purple-400 shadow-md'
+                        return (
+                            <div
+                                key={item._id || item.roomId}
+                                className={`bg-white rounded-2xl border transition-all p-5 sm:p-6 shadow-xs hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-5 ${isLiveNow
+                                    ? 'border-rose-300 ring-2 ring-rose-500/10'
                                     : isCompleted
-                                    ? 'bg-white border-emerald-200/90 hover:border-emerald-300 shadow-2xs'
-                                    : 'bg-white border-gray-200/90 hover:border-purple-200 shadow-2xs'
-                            }`}
-                        >
-                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                {/* Left Side: Details */}
-                                <div className="space-y-2 flex-1 min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {isLive ? (
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-600 text-white animate-pulse shadow-xs">
-                                                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                                                LIVE NOW
-                                            </span>
-                                        ) : isCompleted ? (
-                                            <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                                Completed & Evaluated
-                                            </span>
-                                        ) : isTodaySession ? (
-                                            <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                                                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                                Scheduled For Today
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-100 text-[#6A38C2] border border-purple-200">
-                                                <Calendar className="w-3.5 h-3.5" />
-                                                Scheduled
-                                            </span>
-                                        )}
+                                        ? 'border-slate-200 bg-slate-50/40'
+                                        : 'border-slate-200 hover:border-purple-200'
+                                    }`}
+                            >
+                                {/* Left Section: Candidate / Job / Time */}
+                                <div className="flex items-start gap-4">
+                                    <Avatar className="h-12 w-12 rounded-2xl border border-slate-200 bg-purple-50 text-[#6A38C2] font-black shrink-0">
+                                        <AvatarFallback>
+                                            {item.candidate?.fullname?.charAt(0) || 'C'}
+                                        </AvatarFallback>
+                                    </Avatar>
 
-                                        <Badge variant="outline" className="text-xs font-bold text-gray-800 bg-gray-50 border-gray-200">
-                                            {item.roundType}
-                                        </Badge>
+                                    <div className="space-y-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="font-extrabold text-slate-900 text-base">
+                                                {item.candidate?.fullname || 'Candidate'}
+                                            </h3>
+                                            <span className="text-xs text-slate-400">•</span>
+                                            <span className="text-xs font-semibold text-slate-600">
+                                                {item.job?.title || 'Engineering Role'}
+                                            </span>
 
-                                        <span className="text-xs text-gray-500 font-medium">
-                                            {item.durationMinutes || 45} mins
-                                        </span>
+                                            {/* Status Badge */}
+                                            {isLiveNow ? (
+                                                <Badge className="bg-rose-600 text-white font-bold text-[10px] animate-pulse">
+                                                    LIVE NOW
+                                                </Badge>
+                                            ) : isCompleted ? (
+                                                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-bold text-[10px]">
+                                                    <Check className="w-3 h-3 mr-1" /> Completed
+                                                </Badge>
+                                            ) : (
+                                                <Badge className="bg-purple-100 text-[#6A38C2] border-purple-200 font-bold text-[10px]">
+                                                    Scheduled
+                                                </Badge>
+                                            )}
 
-                                        {/* Conducted By Badge */}
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-purple-50 text-[#6A38C2] px-2 py-0.5 rounded-md border border-purple-200">
-                                            <UserCheck className="w-3 h-3" />
-                                            Interviewer: {interviewerDisplay}
-                                        </span>
-                                    </div>
+                                            {/* Round Badge */}
+                                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                                                {item.roundType || 'Technical Round'}
+                                            </span>
+                                        </div>
 
-                                    {/* Role & Company */}
-                                    <div>
-                                        <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 flex-wrap">
-                                            <span>{item.job?.title || 'Open Job Role'}</span>
-                                            {item.company?.name && (
-                                                <span className="text-xs font-semibold text-gray-500 font-normal">
-                                                    at {item.company.name}
+                                        {/* Date, Time & Company */}
+                                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-0.5">
+                                            <span className="flex items-center gap-1 font-medium text-slate-700">
+                                                <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                                                {item.interviewDate || 'Upcoming'}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                                {item.interviewTime} ({item.durationMinutes || 45} mins)
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                                                {item.company?.name || 'HireHub Partner'}
+                                            </span>
+                                        </div>
+
+                                        {/* Assigned Panelist / Recruiter Tag */}
+                                        <div className="pt-1 flex flex-wrap items-center gap-2 text-xs">
+                                            {isAssignedToOther ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 font-semibold text-[11px]">
+                                                    <Shield className="w-3 h-3 text-indigo-600" />
+                                                    Panelist: {panelistName} ({item.assignedInterviewer?.role || 'Technical Lead'})
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 font-semibold text-[11px]">
+                                                    <UserCheck className="w-3 h-3 text-purple-600" />
+                                                    Conducted by: {item.recruiter?.fullname || 'Lead Recruiter'}
                                                 </span>
                                             )}
-                                        </h4>
-                                    </div>
 
-                                    {/* Date, Time & Participant */}
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-                                        <span className="inline-flex items-center gap-1.5 font-semibold text-gray-800">
-                                            <Calendar className="w-3.5 h-3.5 text-[#6A38C2]" />
-                                            {item.interviewDate} at {item.interviewTime}
-                                        </span>
-
-                                        <span className="inline-flex items-center gap-1.5 text-gray-700">
-                                            <User className="w-3.5 h-3.5 text-gray-400" />
-                                            <span>{isRecruiter ? 'Candidate:' : 'Recruiter:'}</span>
-                                            <span className="font-bold text-gray-900">{partner?.fullname || 'Participant'}</span>
-                                            <span className="text-gray-400">({partner?.email})</span>
-                                        </span>
-                                    </div>
-
-                                    {/* Instructions / Notes */}
-                                    {item.notes && (
-                                        <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200/70 text-xs text-gray-700 max-w-2xl">
-                                            <span className="font-bold text-gray-900">Agenda / Instructions: </span>
-                                            <span>{item.notes}</span>
-                                        </div>
-                                    )}
-
-                                    {/* Scorecard Summary Pill if completed */}
-                                    {isCompleted && item.evaluation && (
-                                        <div className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 max-w-2xl">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-bold text-emerald-950">Scorecard:</span>
-                                                <span className="px-2 py-0.5 rounded-md bg-emerald-200/70 text-emerald-900 font-bold text-[11px]">
-                                                    {item.evaluation.hiringDecision || 'Completed'}
+                                            {/* Report status tags */}
+                                            {report.isSubmitted && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                                    <FileCheck className="w-3 h-3" /> Panelist Score: {report.overallRating || report.technicalScore || 4}/5 ({report.panelistRecommendation || 'Recommended'})
                                                 </span>
-                                                {item.evaluation.technicalScore > 0 && (
-                                                    <span className="text-emerald-800 font-semibold">
-                                                        Tech: {item.evaluation.technicalScore}/5 • Problem Solving: {item.evaluation.problemSolvingScore || 4}/5
-                                                    </span>
-                                                )}
-                                            </div>
+                                            )}
+
+                                            {decision.isFinalized && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-black text-[10px]">
+                                                    <Award className="w-3 h-3" /> Final Decision: {decision.finalDecision}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Right Section: Action Buttons */}
+                                <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => copyLink(item.roomId)}
+                                        className="h-9 px-3 rounded-xl text-xs border-slate-200 text-slate-600 hover:text-slate-900 gap-1.5"
+                                        title="Copy Meeting Link"
+                                    >
+                                        <Copy className="w-3.5 h-3.5" />
+                                        Copy Link
+                                    </Button>
+
+                                    {/* Action based on role & status */}
+                                    {isCompleted ? (
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setSelectedScorecardInterview(item)}
+                                                className="h-9 px-3.5 rounded-xl text-xs border-purple-200 text-[#6A38C2] hover:bg-purple-50 font-bold gap-1.5"
+                                            >
+                                                <FileText className="w-3.5 h-3.5" />
+                                                View Scorecard
+                                            </Button>
+
+                                            {/* If Master Recruiter and report submitted, allow final decision */}
+                                            {isRecruiter && !isSubUser && isAssignedToOther && !decision.isFinalized && (
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleOpenFinalizeModal(item)}
+                                                    className="h-9 px-4 rounded-xl text-xs bg-gradient-to-r from-[#6A38C2] to-indigo-600 hover:from-[#582da5] hover:to-indigo-700 text-white font-bold shadow-md gap-1.5 animate-pulse"
+                                                >
+                                                    <Award className="w-3.5 h-3.5" />
+                                                    Finalize Decision
+                                                </Button>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {/* Recruiter / Inspector / Panelist Join Room Button */}
                                             <Button
                                                 size="sm"
-                                                variant="outline"
-                                                onClick={() => setSelectedScorecardInterview(item)}
-                                                className="text-[11px] h-7 border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-bold gap-1 self-start sm:self-auto"
+                                                onClick={() => navigate(`/interview/room/${item.roomId}`)}
+                                                className={`h-9 px-4 rounded-xl text-xs font-bold shadow-sm gap-1.5 ${isRecruiter && !isSubUser && isAssignedToOther
+                                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                                    : 'bg-[#6A38C2] hover:bg-[#582da5] text-white'
+                                                    }`}
                                             >
-                                                <FileCheck className="w-3 h-3 text-emerald-700" />
-                                                View Full Report
+                                                <Video className="w-3.5 h-3.5" />
+                                                {isRecruiter && !isSubUser && isAssignedToOther
+                                                    ? 'Join / Inspect Live'
+                                                    : 'Enter Meeting Room'}
                                             </Button>
-                                        </div>
+
+                                            {/* Quick complete modal if interviewer */}
+                                            {isRecruiter && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleOpenEvaluateModal(item)}
+                                                    className="h-9 px-3 rounded-xl text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold gap-1"
+                                                >
+                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    Score
+                                                </Button>
+                                            )}
+                                        </>
                                     )}
-                                </div>
-
-                                {/* Right Side: Actions */}
-                                <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-2 shrink-0">
-                                    <Button
-                                        onClick={() => navigate(`/interview/room/${item.roomId}`)}
-                                        className={`text-xs font-bold shadow-xs px-4 h-9 gap-1.5 ${
-                                            isLive
-                                                ? 'bg-rose-600 hover:bg-rose-700 text-white animate-bounce'
-                                                : isTodaySession
-                                                ? 'bg-[#6A38C2] hover:bg-[#582ea8] text-white'
-                                                : 'bg-[#6A38C2] hover:bg-[#582ea8] text-white'
-                                        }`}
-                                    >
-                                        <Video className="w-3.5 h-3.5" />
-                                        <span>
-                                            {isLive
-                                                ? 'JOIN LIVE CALL NOW'
-                                                : isTodaySession
-                                                ? 'Enter Interview Room'
-                                                : 'Open Video Room'}
-                                        </span>
-                                    </Button>
-
-                                    {/* Mark Completed & Evaluate Button for Recruiter */}
-                                    {isRecruiter && !isCompleted && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleOpenEvaluateModal(item)}
-                                            className="text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-8 gap-1"
-                                        >
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                            Mark Completed & Score
-                                        </Button>
-                                    )}
-
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => copyLink(item.roomId)}
-                                        className="text-xs font-semibold border-gray-200 text-gray-700 hover:bg-gray-50 h-8 gap-1"
-                                    >
-                                        <Copy className="w-3 h-3 text-gray-500" />
-                                        <span>Copy Room Link</span>
-                                    </Button>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
 
-            {/* DIALOG 1: Submit Evaluation Scorecard & Mark Interview Completed */}
-            <Dialog open={!!evaluatingInterview} onOpenChange={(open) => !open && setEvaluatingInterview(null)}>
-                <DialogContent className="max-w-xl bg-white p-6 rounded-2xl max-h-[90vh] overflow-y-auto">
+            {/* Technical Panelist / Quick Evaluation Modal */}
+            <Dialog open={Boolean(evaluatingInterview)} onOpenChange={() => setEvaluatingInterview(null)}>
+                <DialogContent className="max-w-xl rounded-3xl border-slate-200 p-6 max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <div className="flex items-center gap-2 text-emerald-600">
-                            <CheckCircle2 className="w-5 h-5" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Interview Finalization</span>
+                        <div className="w-10 h-10 rounded-2xl bg-purple-100 text-[#6A38C2] flex items-center justify-center font-bold mb-2">
+                            <Award className="w-5 h-5" />
                         </div>
-                        <DialogTitle className="text-lg font-extrabold text-gray-900 mt-1">
-                            Complete Interview & Submit Scorecard
+                        <DialogTitle className="text-xl font-black text-slate-900">
+                            {isSubUser ? 'Submit Technical Panelist Report' : 'Candidate Evaluation Scorecard'}
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-gray-500">
-                            Record structured evaluation ratings for{' '}
-                            <span className="font-bold text-gray-800">{evaluatingInterview?.candidate?.fullname}</span> for the position of{' '}
-                            <span className="font-bold text-gray-800">{evaluatingInterview?.job?.title}</span>.
+                        <DialogDescription className="text-xs text-slate-500">
+                            Candidate: <span className="font-bold text-slate-800">{evaluatingInterview?.candidate?.fullname}</span> • Position: <span className="font-bold text-slate-800">{evaluatingInterview?.job?.title}</span>
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleSubmitEvaluation} className="space-y-4 mt-2">
-                        {/* Rating sliders / selects */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-gray-50/80 rounded-xl border border-gray-200">
+                    <form onSubmit={handleSubmitEvaluation} className="space-y-4 py-2">
+                        {/* Rating scales */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                             <div>
-                                <Label className="text-xs font-bold text-gray-700 block mb-1">
-                                    Technical Architecture (1-5)
-                                </Label>
+                                <Label className="text-[11px] font-bold text-slate-600">Technical Code</Label>
                                 <select
                                     value={evalForm.technicalScore}
                                     onChange={(e) => setEvalForm({ ...evalForm, technicalScore: e.target.value })}
-                                    className="w-full text-xs rounded-xl h-9 border border-gray-200 bg-white px-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full mt-1 h-9 px-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                                 >
-                                    <option value={5}>5 - Outstanding (Expert)</option>
-                                    <option value={4}>4 - Strong (Exceeds Bar)</option>
-                                    <option value={3}>3 - Good (Meets Bar)</option>
-                                    <option value={2}>2 - Marginal (Below Bar)</option>
-                                    <option value={1}>1 - Unsatisfactory</option>
+                                    {[5, 4, 3, 2, 1].map((s) => (
+                                        <option key={s} value={s}>{s} / 5</option>
+                                    ))}
                                 </select>
                             </div>
-
                             <div>
-                                <Label className="text-xs font-bold text-gray-700 block mb-1">
-                                    Problem Solving & DSA (1-5)
-                                </Label>
+                                <Label className="text-[11px] font-bold text-slate-600">Problem Solving</Label>
                                 <select
                                     value={evalForm.problemSolvingScore}
                                     onChange={(e) => setEvalForm({ ...evalForm, problemSolvingScore: e.target.value })}
-                                    className="w-full text-xs rounded-xl h-9 border border-gray-200 bg-white px-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full mt-1 h-9 px-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                                 >
-                                    <option value={5}>5 - Outstanding</option>
-                                    <option value={4}>4 - Strong Analytical Skills</option>
-                                    <option value={3}>3 - Good Logical Flow</option>
-                                    <option value={2}>2 - Struggled on Edge Cases</option>
-                                    <option value={1}>1 - Incomplete Solution</option>
+                                    {[5, 4, 3, 2, 1].map((s) => (
+                                        <option key={s} value={s}>{s} / 5</option>
+                                    ))}
                                 </select>
                             </div>
-
                             <div>
-                                <Label className="text-xs font-bold text-gray-700 block mb-1">
-                                    Communication & Clarity (1-5)
-                                </Label>
+                                <Label className="text-[11px] font-bold text-slate-600">System Design</Label>
+                                <select
+                                    value={evalForm.systemDesignScore}
+                                    onChange={(e) => setEvalForm({ ...evalForm, systemDesignScore: e.target.value })}
+                                    className="w-full mt-1 h-9 px-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                                >
+                                    {[5, 4, 3, 2, 1].map((s) => (
+                                        <option key={s} value={s}>{s} / 5</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <Label className="text-[11px] font-bold text-slate-600">Communication</Label>
                                 <select
                                     value={evalForm.communicationScore}
                                     onChange={(e) => setEvalForm({ ...evalForm, communicationScore: e.target.value })}
-                                    className="w-full text-xs rounded-xl h-9 border border-gray-200 bg-white px-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    className="w-full mt-1 h-9 px-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                                 >
-                                    <option value={5}>5 - Clear & Articulate</option>
-                                    <option value={4}>4 - Effective Communicator</option>
-                                    <option value={3}>3 - Clear with Prompting</option>
-                                    <option value={2}>2 - Difficult to Follow</option>
-                                    <option value={1}>1 - Poor Communication</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <Label className="text-xs font-bold text-gray-700 block mb-1">
-                                    Cultural & Team Fit (1-5)
-                                </Label>
-                                <select
-                                    value={evalForm.cultureFitScore}
-                                    onChange={(e) => setEvalForm({ ...evalForm, cultureFitScore: e.target.value })}
-                                    className="w-full text-xs rounded-xl h-9 border border-gray-200 bg-white px-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                >
-                                    <option value={5}>5 - Exceptional Cultural Alignment</option>
-                                    <option value={4}>4 - Great Team Collaborator</option>
-                                    <option value={3}>3 - Positive Cultural Fit</option>
-                                    <option value={2}>2 - Potential Alignment Concerns</option>
-                                    <option value={1}>1 - Not a Fit</option>
+                                    {[5, 4, 3, 2, 1].map((s) => (
+                                        <option key={s} value={s}>{s} / 5</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
 
-                        {/* Overall Decision */}
+                        <div>
+                            <Label className="text-xs font-bold text-slate-700">Panelist Recommendation</Label>
+                            <select
+                                value={evalForm.panelistRecommendation}
+                                onChange={(e) => setEvalForm({ ...evalForm, panelistRecommendation: e.target.value })}
+                                className="w-full mt-1 h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900"
+                            >
+                                <option value="Strong Hire">Strong Hire (Top 5% Candidate)</option>
+                                <option value="Hire">Hire (Meets all technical standards)</option>
+                                <option value="Advance to Next Round">Advance to Next Round (Recommend second round)</option>
+                                <option value="Leaning No Hire">Leaning No Hire (Marginal score)</option>
+                                <option value="No Hire">No Hire (Below bar)</option>
+                            </select>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <Label className="text-xs font-bold text-gray-700 block mb-1">
-                                    Final Hiring Decision Recommendation
-                                </Label>
-                                <select
-                                    value={evalForm.hiringDecision}
-                                    onChange={(e) => setEvalForm({ ...evalForm, hiringDecision: e.target.value })}
-                                    className="w-full text-xs rounded-xl h-9 border border-gray-200 bg-white px-3 font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                >
-                                    <option value="Strong Hire">⭐ Strong Hire (Top 5%)</option>
-                                    <option value="Hire">✅ Hire</option>
-                                    <option value="Leaning Hire">👍 Leaning Hire</option>
-                                    <option value="Leaning No Hire">👎 Leaning No Hire</option>
-                                    <option value="No Hire">❌ No Hire</option>
-                                    <option value="Undecided">⏳ Undecided</option>
-                                </select>
+                                <Label className="text-xs font-bold text-slate-700">Key Technical Strengths</Label>
+                                <textarea
+                                    rows={2}
+                                    value={evalForm.strengths}
+                                    onChange={(e) => setEvalForm({ ...evalForm, strengths: e.target.value })}
+                                    placeholder="e.g. Strong understanding of async patterns, clean modular code"
+                                    className="w-full mt-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-purple-500/20"
+                                />
                             </div>
-
                             <div>
-                                <Label className="text-xs font-bold text-gray-700 block mb-1">
-                                    Advance Job Application Status
-                                </Label>
-                                <select
-                                    value={evalForm.advanceApplicationStatus}
-                                    onChange={(e) => setEvalForm({ ...evalForm, advanceApplicationStatus: e.target.value })}
-                                    className="w-full text-xs rounded-xl h-9 border border-gray-200 bg-white px-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                >
-                                    <option value="accepted">Mark Application as Accepted</option>
-                                    <option value="rejected">Mark Application as Rejected</option>
-                                    <option value="pending">Keep as In Review (Pending)</option>
-                                </select>
+                                <Label className="text-xs font-bold text-slate-700">Areas for Improvement</Label>
+                                <textarea
+                                    rows={2}
+                                    value={evalForm.weaknesses}
+                                    onChange={(e) => setEvalForm({ ...evalForm, weaknesses: e.target.value })}
+                                    placeholder="e.g. Edge case handling on null states"
+                                    className="w-full mt-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-purple-500/20"
+                                />
                             </div>
                         </div>
 
-                        {/* Interviewer Feedback Notes */}
                         <div>
-                            <Label className="text-xs font-bold text-gray-700 block mb-1">
-                                Interviewer Feedback & Evaluation Remarks
-                            </Label>
+                            <Label className="text-xs font-bold text-slate-700">Detailed Panelist Notes & Code Review Summary</Label>
                             <textarea
                                 rows={3}
-                                value={evalForm.interviewerFeedback}
-                                onChange={(e) => setEvalForm({ ...evalForm, interviewerFeedback: e.target.value })}
-                                placeholder="Candidate demonstrated strong state management in React, clear architectural patterns, and answered trade-off questions with high fidelity..."
-                                className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                value={evalForm.detailedNotes}
+                                onChange={(e) => setEvalForm({ ...evalForm, detailedNotes: e.target.value })}
+                                placeholder="Summary of algorithmic complexity, architectural reasoning, and final thoughts for the Lead Recruiter..."
+                                className="w-full mt-1 p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-purple-500/20"
                             />
                         </div>
 
-                        <DialogFooter className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                        <DialogFooter className="pt-2 gap-2">
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => setEvaluatingInterview(null)}
-                                disabled={evalSubmitting}
-                                className="text-xs border-gray-200"
+                                className="rounded-xl text-xs h-10"
                             >
                                 Cancel
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={evalSubmitting}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs"
+                                className="bg-[#6A38C2] hover:bg-[#582da5] text-white font-bold rounded-xl text-xs h-10 px-5"
                             >
-                                {evalSubmitting ? 'Saving Scorecard...' : 'Complete & Save Evaluation'}
+                                {evalSubmitting ? 'Submitting...' : isSubUser ? 'Submit Report to Recruiter' : 'Save Scorecard & Finalize'}
                             </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
 
-            {/* DIALOG 2: View Full Scorecard & Export Report */}
-            <Dialog
-                open={!!selectedScorecardInterview}
-                onOpenChange={(open) => !open && setSelectedScorecardInterview(null)}
-            >
-                <DialogContent className="max-w-2xl bg-white p-6 sm:p-7 rounded-2xl max-h-[90vh] overflow-y-auto">
+            {/* Master Recruiter Final Decision Modal */}
+            <Dialog open={Boolean(finalizingInterview)} onOpenChange={() => setFinalizingInterview(null)}>
+                <DialogContent className="max-w-xl rounded-3xl border-purple-200 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-emerald-700">
-                                <Award className="w-5 h-5" />
-                                <span className="text-xs font-bold uppercase tracking-wider">Candidate Evaluation Report</span>
-                            </div>
-                            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                {selectedScorecardInterview?.evaluation?.hiringDecision || 'Completed'}
-                            </span>
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#6A38C2] to-indigo-600 text-white flex items-center justify-center font-bold mb-2 shadow-md">
+                            <Award className="w-6 h-6" />
                         </div>
-                        <DialogTitle className="text-lg sm:text-xl font-extrabold text-gray-900 mt-1">
-                            Interview Scorecard & Rubric Summary
+                        <DialogTitle className="text-xl font-black text-slate-900">
+                            Recruiter Executive Decision & Final Sign-Off
                         </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">
+                            Review the submitted technical panelist report and make the authoritative hiring determination.
+                        </DialogDescription>
                     </DialogHeader>
 
-                    {selectedScorecardInterview && (
-                        <div className="space-y-4 text-xs">
-                            {/* Candidate & Role Profile Header */}
-                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
-                                <div className="flex justify-between py-1 border-b border-gray-200/80">
-                                    <span className="text-gray-500">Candidate:</span>
-                                    <span className="font-bold text-gray-900">
-                                        {selectedScorecardInterview.candidate?.fullname} ({selectedScorecardInterview.candidate?.email})
+                    {finalizingInterview && (
+                        <form onSubmit={handleFinalizeRecruiterDecision} className="space-y-4 py-2">
+                            {/* Panelist Report Summary Box */}
+                            <div className="bg-purple-50/70 border border-purple-100 rounded-2xl p-4 space-y-2 text-xs">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-purple-900">
+                                        Report from: {finalizingInterview.assignedInterviewer?.name || 'Panelist'} ({finalizingInterview.assignedInterviewer?.role})
                                     </span>
+                                    <Badge className="bg-purple-200 text-purple-900 font-bold text-[10px]">
+                                        Rec: {finalizingInterview.panelistReport?.panelistRecommendation || 'Hire'}
+                                    </Badge>
                                 </div>
-                                <div className="flex justify-between py-1 border-b border-gray-200/80">
-                                    <span className="text-gray-500">Target Role:</span>
-                                    <span className="font-bold text-gray-900">
-                                        {selectedScorecardInterview.job?.title} at {selectedScorecardInterview.company?.name || 'Company'}
-                                    </span>
+                                <div className="grid grid-cols-4 gap-2 text-center pt-2 border-t border-purple-200/60 font-semibold text-slate-700">
+                                    <div>Code: <span className="text-purple-800">{finalizingInterview.panelistReport?.technicalScore || 4}/5</span></div>
+                                    <div>DSA: <span className="text-purple-800">{finalizingInterview.panelistReport?.problemSolvingScore || 4}/5</span></div>
+                                    <div>Design: <span className="text-purple-800">{finalizingInterview.panelistReport?.systemDesignScore || 4}/5</span></div>
+                                    <div>Comm: <span className="text-purple-800">{finalizingInterview.panelistReport?.communicationScore || 5}/5</span></div>
                                 </div>
-                                <div className="flex justify-between py-1 border-b border-gray-200/80">
-                                    <span className="text-gray-500">Session Date & Round:</span>
-                                    <span className="font-bold text-[#6A38C2]">
-                                        {selectedScorecardInterview.interviewDate} at {selectedScorecardInterview.interviewTime} (
-                                        {selectedScorecardInterview.roundType})
-                                    </span>
-                                </div>
-                                <div className="flex justify-between py-1">
-                                    <span className="text-gray-500">Conducted By:</span>
-                                    <span className="font-bold text-gray-900">
-                                        {selectedScorecardInterview.interviewerType === 'assigned_panelist' &&
-                                        selectedScorecardInterview.assignedInterviewer?.name
-                                            ? `${selectedScorecardInterview.assignedInterviewer.name} (${selectedScorecardInterview.assignedInterviewer.role || 'Panelist'})`
-                                            : selectedScorecardInterview.recruiter?.fullname || 'Lead Recruiter'}
-                                    </span>
-                                </div>
+                                {finalizingInterview.panelistReport?.detailedNotes && (
+                                    <p className="text-slate-600 italic pt-1 border-t border-purple-100">
+                                        "{finalizingInterview.panelistReport.detailedNotes}"
+                                    </p>
+                                )}
                             </div>
 
-                            {/* Score Matrix */}
+                            {/* Final Decision Selector */}
                             <div>
-                                <h4 className="font-extrabold text-gray-900 mb-2">Evaluated Competency Matrix</h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                                    <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl text-center">
-                                        <p className="text-[11px] font-semibold text-purple-900">Technical Depth</p>
-                                        <p className="text-lg font-extrabold text-[#6A38C2] mt-1">
-                                            {selectedScorecardInterview.evaluation?.technicalScore || 4}/5
-                                        </p>
-                                    </div>
-                                    <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-center">
-                                        <p className="text-[11px] font-semibold text-indigo-900">Problem Solving</p>
-                                        <p className="text-lg font-extrabold text-indigo-700 mt-1">
-                                            {selectedScorecardInterview.evaluation?.problemSolvingScore || 4}/5
-                                        </p>
-                                    </div>
-                                    <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-center">
-                                        <p className="text-[11px] font-semibold text-blue-900">Communication</p>
-                                        <p className="text-lg font-extrabold text-blue-700 mt-1">
-                                            {selectedScorecardInterview.evaluation?.communicationScore || 5}/5
-                                        </p>
-                                    </div>
-                                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
-                                        <p className="text-[11px] font-semibold text-emerald-900">Culture & Fit</p>
-                                        <p className="text-lg font-extrabold text-emerald-700 mt-1">
-                                            {selectedScorecardInterview.evaluation?.cultureFitScore || 4}/5
-                                        </p>
-                                    </div>
-                                </div>
+                                <Label className="text-xs font-bold text-slate-900">Recruiter Final Decision *</Label>
+                                <select
+                                    value={finalForm.finalDecision}
+                                    onChange={(e) => setFinalForm({ ...finalForm, finalDecision: e.target.value })}
+                                    className="w-full mt-1.5 h-11 px-3 bg-white border-2 border-purple-200 rounded-xl text-sm font-extrabold text-slate-900 focus:ring-2 focus:ring-purple-500/20"
+                                >
+                                    <option value="Hire">🎉 Hire Candidate (Extend Offer)</option>
+                                    <option value="Strong Hire">⭐ Strong Hire (High Priority Top Tier)</option>
+                                    <option value="Advance to Next Round">⏩ Advance to Next Round (Schedule next step)</option>
+                                    <option value="On Hold">⏸️ On Hold (Evaluate against remaining candidates)</option>
+                                    <option value="Reject">❌ Reject Application</option>
+                                </select>
                             </div>
 
-                            {/* Interviewer Feedback */}
                             <div>
-                                <h4 className="font-extrabold text-gray-900 mb-1">Interviewer Feedback & Notes</h4>
-                                <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 leading-relaxed italic">
-                                    "{selectedScorecardInterview.evaluation?.interviewerFeedback || 'The candidate showed great technical fluency, strong understanding of core architectural principles, and clear communication throughout the live session.'}"
-                                </div>
+                                <Label className="text-xs font-bold text-slate-700">Recruiter Executive Remarks & Next Steps</Label>
+                                <textarea
+                                    rows={3}
+                                    value={finalForm.finalRemarks}
+                                    onChange={(e) => setFinalForm({ ...finalForm, finalRemarks: e.target.value })}
+                                    placeholder="Approved based on technical panelist recommendation. Proceed with compensation offer..."
+                                    className="w-full mt-1 p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-purple-500/20"
+                                />
                             </div>
 
-                            <DialogFooter className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                            <DialogFooter className="pt-3 gap-2">
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    size="sm"
-                                    onClick={() => copyScorecardSummary(selectedScorecardInterview)}
-                                    className="text-xs border-gray-200 text-gray-700 gap-1.5"
+                                    onClick={() => setFinalizingInterview(null)}
+                                    className="rounded-xl text-xs h-10"
                                 >
-                                    <Copy className="w-3.5 h-3.5" />
-                                    Copy Scorecard
+                                    Cancel
                                 </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={finalizingSubmitting}
+                                    className="bg-gradient-to-r from-[#6A38C2] to-indigo-600 hover:from-[#582da5] hover:to-indigo-700 text-white font-bold rounded-xl text-xs h-10 px-6 shadow-md"
+                                >
+                                    {finalizingSubmitting ? 'Recording Decision...' : 'Confirm Final Decision'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
 
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handlePrintScorecard}
-                                        className="text-xs border-gray-200 text-gray-700 gap-1.5"
-                                    >
-                                        <Printer className="w-3.5 h-3.5" />
-                                        Print Report
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        onClick={() => setSelectedScorecardInterview(null)}
-                                        className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-bold"
-                                    >
-                                        Done
-                                    </Button>
+            {/* Scorecard Viewer Modal */}
+            <Dialog open={Boolean(selectedScorecardInterview)} onOpenChange={() => setSelectedScorecardInterview(null)}>
+                <DialogContent className="max-w-2xl rounded-3xl border-slate-200 p-6 max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold mb-2">
+                            <CheckCircle2 className="w-6 h-6" />
+                        </div>
+                        <DialogTitle className="text-xl font-black text-slate-900">
+                            Interview Scorecard & Hiring Dossier
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">
+                            Candidate: {selectedScorecardInterview?.candidate?.fullname} • Position: {selectedScorecardInterview?.job?.title}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedScorecardInterview && (
+                        <div className="space-y-4 py-2 text-xs">
+                            {/* Header details */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Interview Date:</span>
+                                    <p className="font-bold text-slate-800">{selectedScorecardInterview.interviewDate}</p>
                                 </div>
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Round Type:</span>
+                                    <p className="font-bold text-purple-700">{selectedScorecardInterview.roundType}</p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Interviewer:</span>
+                                    <p className="font-bold text-slate-800">
+                                        {selectedScorecardInterview.assignedInterviewer?.name || selectedScorecardInterview.recruiter?.fullname}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Final Decision:</span>
+                                    <p className="font-extrabold text-emerald-700">
+                                        {selectedScorecardInterview.recruiterFinalDecision?.finalDecision || selectedScorecardInterview.evaluation?.hiringDecision || 'Completed'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Scores */}
+                            <div className="grid grid-cols-4 gap-3 text-center bg-purple-50/50 p-3.5 rounded-2xl border border-purple-100">
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-500">Technical Code</span>
+                                    <p className="text-lg font-black text-purple-900">
+                                        {selectedScorecardInterview.panelistReport?.technicalScore || selectedScorecardInterview.evaluation?.technicalScore || 4}/5
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-500">Problem Solving</span>
+                                    <p className="text-lg font-black text-purple-900">
+                                        {selectedScorecardInterview.panelistReport?.problemSolvingScore || selectedScorecardInterview.evaluation?.problemSolvingScore || 4}/5
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-500">System Design</span>
+                                    <p className="text-lg font-black text-purple-900">
+                                        {selectedScorecardInterview.panelistReport?.systemDesignScore || 4}/5
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold text-slate-500">Communication</span>
+                                    <p className="text-lg font-black text-purple-900">
+                                        {selectedScorecardInterview.panelistReport?.communicationScore || selectedScorecardInterview.evaluation?.communicationScore || 5}/5
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Panelist Notes */}
+                            {selectedScorecardInterview.panelistReport?.detailedNotes && (
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1">
+                                    <h4 className="font-bold text-slate-900">Panelist Evaluation & Code Notes:</h4>
+                                    <p className="text-slate-600 leading-relaxed">
+                                        {selectedScorecardInterview.panelistReport.detailedNotes}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Recruiter Remarks */}
+                            {selectedScorecardInterview.recruiterFinalDecision?.finalRemarks && (
+                                <div className="bg-purple-50 p-4 rounded-2xl border border-purple-200 space-y-1">
+                                    <h4 className="font-bold text-purple-900">Lead Recruiter Final Sign-Off Remarks:</h4>
+                                    <p className="text-purple-800 leading-relaxed">
+                                        {selectedScorecardInterview.recruiterFinalDecision.finalRemarks}
+                                    </p>
+                                </div>
+                            )}
+
+                            <DialogFooter>
+                                <Button
+                                    onClick={() => setSelectedScorecardInterview(null)}
+                                    className="w-full bg-[#6A38C2] hover:bg-[#582da5] text-white font-bold rounded-xl text-xs h-10"
+                                >
+                                    Close Scorecard
+                                </Button>
                             </DialogFooter>
                         </div>
                     )}

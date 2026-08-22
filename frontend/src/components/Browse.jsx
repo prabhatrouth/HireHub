@@ -4,7 +4,8 @@ import Job from './Job';
 import { useDispatch, useSelector } from 'react-redux';
 import { setSearchedQuery } from '@/redux/jobSlice';
 import useGetAllJobs from '@/hooks/useGetAllJobs';
-import { Search, Sparkles, Briefcase } from 'lucide-react';
+import { Search, Sparkles, Briefcase, Compass } from 'lucide-react';
+import Footer from './shared/Footer';
 
 const Browse = () => {
     useGetAllJobs();
@@ -20,49 +21,57 @@ const Browse = () => {
     const jobs = allJobs || [];
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC]">
+        <div className="min-h-screen bg-[#FAFAFC] flex flex-col">
             <Navbar />
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Header */}
-                <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-1">
-                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                            Search Results
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+                {/* Header Card */}
+                <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-xs mb-8">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#6A38C2] uppercase tracking-wider mb-1.5">
+                        <Compass className="w-4 h-4" />
+                        Explore Positions
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                            Browse Open Roles
                         </h1>
-                        <span className="text-xs bg-purple-100 text-[#6A38C2] font-semibold px-2.5 py-0.5 rounded-full">
+                        <span className="text-xs sm:text-sm font-bold bg-purple-50 text-[#6A38C2] px-3 py-1 rounded-full border border-purple-100">
                             {jobs.length} Opportunities
                         </span>
                     </div>
                     {searchedQuery ? (
-                        <p className="text-xs sm:text-sm text-gray-500">
-                            Showing jobs matching <span className="font-semibold text-gray-800">"{searchedQuery}"</span>
+                        <p className="text-xs sm:text-sm text-slate-500 mt-2">
+                            Showing verified roles matching <span className="font-bold text-slate-800">"{searchedQuery}"</span>
                         </p>
                     ) : (
-                        <p className="text-xs sm:text-sm text-gray-500">
-                            Browse all active roles across top engineering, design, and product teams.
+                        <p className="text-xs sm:text-sm text-slate-500 mt-2">
+                            Explore verified engineering, AI, product, and design roles from high-growth tech companies worldwide.
                         </p>
                     )}
                 </div>
 
                 {/* Grid */}
                 {jobs.length <= 0 ? (
-                    <div className="bg-white rounded-2xl border border-gray-200/80 p-12 text-center shadow-xs">
-                        <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                        <h3 className="text-base font-bold text-gray-800">No jobs found matching your query</h3>
-                        <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1">
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs">
+                        <div className="w-14 h-14 rounded-2xl bg-purple-50 text-[#6A38C2] flex items-center justify-center mx-auto mb-4 border border-purple-100">
+                            <Search className="w-7 h-7" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-800">No jobs found matching your query</h3>
+                        <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto mt-1">
                             Try searching for different keywords, technical skills, or locations.
                         </p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         {jobs.map((job) => (
                             <Job key={job._id} job={job} />
                         ))}
                     </div>
                 )}
             </div>
+            <Footer />
         </div>
     );
 };
 
 export default Browse;
+

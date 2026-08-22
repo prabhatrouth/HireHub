@@ -106,12 +106,62 @@ const interviewSchema = new mongoose.Schema(
             cultureFitScore: { type: Number, default: 0 },
             hiringDecision: {
                 type: String,
-                enum: ["Strong Hire", "Hire", "Leaning Hire", "Leaning No Hire", "No Hire", "Undecided"],
+                enum: ["Strong Hire", "Hire", "Leaning Hire", "Leaning No Hire", "No Hire", "Undecided", "Next Round Recommended"],
                 default: "Undecided",
             },
             interviewerFeedback: { type: String, default: "" },
             evaluatedAt: { type: Date },
         },
+        panelistReport: {
+            isSubmitted: { type: Boolean, default: false },
+            submittedAt: { type: Date },
+            submittedBy: {
+                name: { type: String, default: "" },
+                email: { type: String, default: "" },
+                role: { type: String, default: "" },
+            },
+            technicalScore: { type: Number, default: 0 },
+            problemSolvingScore: { type: Number, default: 0 },
+            systemDesignScore: { type: Number, default: 0 },
+            communicationScore: { type: Number, default: 0 },
+            overallRating: { type: Number, default: 0 },
+            strengths: { type: String, default: "" },
+            weaknesses: { type: String, default: "" },
+            keyHighlights: { type: String, default: "" },
+            codeQualitySummary: { type: String, default: "" },
+            panelistRecommendation: {
+                type: String,
+                enum: ["Strong Hire", "Hire", "Leaning Hire", "Leaning No Hire", "No Hire", "Advance to Next Round", "Undecided"],
+                default: "Undecided",
+            },
+            detailedNotes: { type: String, default: "" },
+        },
+        recruiterFinalDecision: {
+            isFinalized: { type: Boolean, default: false },
+            finalDecision: {
+                type: String,
+                enum: ["Pending Review", "Hire", "Strong Hire", "Reject", "Advance to Next Round", "On Hold", "Re-evaluate"],
+                default: "Pending Review",
+            },
+            finalRemarks: { type: String, default: "" },
+            finalizedBy: {
+                name: { type: String, default: "" },
+                email: { type: String, default: "" },
+            },
+            finalizedAt: { type: Date },
+            nextRoundScheduled: { type: Boolean, default: false },
+            nextRoundType: { type: String, default: "" },
+        },
+        inspectionLogs: [
+            {
+                inspectedBy: {
+                    name: { type: String },
+                    email: { type: String },
+                },
+                inspectedAt: { type: Date, default: Date.now },
+                notes: { type: String, default: "" },
+            },
+        ],
     },
     { timestamps: true }
 );

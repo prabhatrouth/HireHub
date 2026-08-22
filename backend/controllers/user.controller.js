@@ -146,6 +146,22 @@ export const login = async (req, res) => {
             phoneNumber: user.phoneNumber,
             role: user.role,
             profile: user.profile || {},
+            isSubUser: Boolean(user.isSubUser),
+            parentRecruiter: user.parentRecruiter || null,
+            subRole: user.subRole || "",
+            department: user.department || "",
+            specialty: user.specialty || [],
+            permissions: user.permissions || {
+                canViewAssignedInterviews: true,
+                canConductInterview: true,
+                canSubmitReport: true,
+                canViewAllInterviews: false,
+                canPostJobs: false,
+                canViewAllApplicants: false,
+                canManageCompanies: false,
+                canFinalizeHiringDecision: false,
+            },
+            subUsers: user.subUsers || [],
         };
 
         return res
