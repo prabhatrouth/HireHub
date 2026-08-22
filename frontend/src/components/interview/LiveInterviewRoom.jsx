@@ -153,6 +153,7 @@ const LiveInterviewRoom = () => {
     const [technicalScore, setTechnicalScore] = useState(4);
     const [communicationScore, setCommunicationScore] = useState(4);
     const [problemSolvingScore, setProblemSolvingScore] = useState(4);
+    const [cultureFitScore, setCultureFitScore] = useState(4);
     const [overallRating, setOverallRating] = useState(4);
     const [hiringDecision, setHiringDecision] = useState('Hire');
     const [interviewerFeedback, setInterviewerFeedback] = useState('');
@@ -477,6 +478,7 @@ const LiveInterviewRoom = () => {
                 technicalScore,
                 communicationScore,
                 problemSolvingScore,
+                cultureFitScore,
                 hiringDecision,
                 interviewerFeedback,
                 advanceApplicationStatus: advanceStatus,
@@ -750,7 +752,10 @@ const LiveInterviewRoom = () => {
                         </div>
                         <p className="text-[11px] text-slate-400 truncate hidden md:block">
                             {interview?.company?.name ? `${interview.company.name} • ` : ''}
-                            Candidate: {candidate.fullname || 'Applicant'} | Interviewer: {recruiter.fullname || 'Recruiter'}
+                            Candidate: {candidate.fullname || 'Applicant'} | Conducted By:{' '}
+                            {interview?.interviewerType === 'assigned_panelist' && interview?.assignedInterviewer?.name
+                                ? `${interview.assignedInterviewer.name} (${interview.assignedInterviewer.role || 'Panelist'})`
+                                : recruiter.fullname || 'Lead Recruiter'}
                         </p>
                     </div>
                 </div>
@@ -1132,7 +1137,7 @@ const LiveInterviewRoom = () => {
 
                             <form onSubmit={handleSubmitEvaluation} className="space-y-4">
                                 {/* Rating Sliders Grid */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                                     <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
                                         <div className="flex justify-between text-xs font-bold">
                                             <span>Technical Skill</span>
@@ -1174,6 +1179,21 @@ const LiveInterviewRoom = () => {
                                             max="5"
                                             value={problemSolvingScore}
                                             onChange={(e) => setProblemSolvingScore(Number(e.target.value))}
+                                            className="w-full accent-purple-500 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
+                                        <div className="flex justify-between text-xs font-bold">
+                                            <span>Culture & Team Fit</span>
+                                            <span className="text-purple-400">{cultureFitScore} / 5</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="5"
+                                            value={cultureFitScore}
+                                            onChange={(e) => setCultureFitScore(Number(e.target.value))}
                                             className="w-full accent-purple-500 cursor-pointer"
                                         />
                                     </div>

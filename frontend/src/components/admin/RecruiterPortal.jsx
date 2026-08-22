@@ -34,6 +34,7 @@ import {
 import useGetAllAdminJobs from '@/hooks/useGetAllAdminJobs';
 import useGetAllCompanies from '@/hooks/useGetAllCompanies';
 import ScheduledInterviewsList from '../interview/ScheduledInterviewsList';
+import TechnicalInterviewersManager from './TechnicalInterviewersManager';
 
 const RecruiterPortal = () => {
     useGetAllAdminJobs();
@@ -178,10 +179,22 @@ const RecruiterPortal = () => {
                                     activeTab === 'interviews'
                                         ? 'bg-white text-gray-900 shadow-md'
                                         : 'bg-white/10 text-purple-200 hover:bg-white/20'
-                                }`}
+                                    }`}
                             >
                                 <Video className="w-4 h-4 text-rose-400" />
                                 Live Video Interviews & Scorecards
+                            </button>
+
+                            <button
+                                onClick={() => handleTabChange('interviewers')}
+                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                                    activeTab === 'interviewers'
+                                        ? 'bg-white text-gray-900 shadow-md'
+                                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
+                                    }`}
+                            >
+                                <Users className="w-4 h-4 text-indigo-400" />
+                                Technical Interviewers Panel
                             </button>
 
                             <button
@@ -307,6 +320,13 @@ const RecruiterPortal = () => {
                     {activeTab === 'interviews' && (
                         <div className="space-y-6 animate-in fade-in duration-200">
                             <ScheduledInterviewsList />
+                        </div>
+                    )}
+
+                    {/* TAB: Technical Interviewers & Sub-Users Panel */}
+                    {activeTab === 'interviewers' && (
+                        <div className="space-y-6 animate-in fade-in duration-200">
+                            <TechnicalInterviewersManager />
                         </div>
                     )}
 

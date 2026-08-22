@@ -23,6 +23,8 @@ export const scheduleInterview = async (req, res) => {
             durationMinutes = 45,
             roundType = "Technical Round",
             notes = "",
+            interviewerType = "recruiter",
+            assignedInterviewer = {},
         } = req.body;
 
         if (!jobId || !candidateId || !interviewDate || !interviewTime) {
@@ -67,6 +69,15 @@ export const scheduleInterview = async (req, res) => {
             roomId,
             meetingLink,
             notes,
+            interviewerType: interviewerType || "recruiter",
+            assignedInterviewer: {
+                name: assignedInterviewer.name || "",
+                email: assignedInterviewer.email || "",
+                role: assignedInterviewer.role || "",
+                department: assignedInterviewer.department || "",
+                notes: assignedInterviewer.notes || "",
+                subUserId: assignedInterviewer.subUserId || "",
+            },
         });
 
         const populatedInterview = await Interview.findById(newInterview._id)
@@ -264,6 +275,7 @@ export const submitEvaluation = async (req, res) => {
             technicalScore = 0,
             communicationScore = 0,
             problemSolvingScore = 0,
+            cultureFitScore = 0,
             hiringDecision = "Undecided",
             interviewerFeedback = "",
             advanceApplicationStatus,
@@ -277,11 +289,16 @@ export const submitEvaluation = async (req, res) => {
             });
         }
 
+        const calculatedRating = Number(rating) || Math.round(
+            (Number(technicalScore) + Number(communicationScore) + Number(problemSolvingScore) + Number(cultureFitScore)) / 4
+        ) || 0;
+
         interview.evaluation = {
-            rating: Number(rating),
+            rating: calculatedRating,
             technicalScore: Number(technicalScore),
             communicationScore: Number(communicationScore),
             problemSolvingScore: Number(problemSolvingScore),
+            cultureFitScore: Number(cultureFitScore),
             hiringDecision,
             interviewerFeedback,
             evaluatedAt: new Date(),
@@ -296,15 +313,207 @@ export const submitEvaluation = async (req, res) => {
             });
         }
 
+        const updatedInterview = await Interview.findById(interview._id)
+            .populate("candidate", "fullname email phoneNumber profile")
+            .populate("recruiter", "fullname email")
+            .populate("job", "title location salary requirements")
+            .populate("company", "name logo location");
+
         return res.status(200).json({
             message: "Scorecard and hiring decision saved successfully!",
             success: true,
-            interview,
+            interview: updatedInterview,
         });
     } catch (error) {
         console.error("Submit Evaluation Error:", error);
         return res.status(500).json({
             message: error.message || "Failed to save evaluation scorecard.",
+            success: false,
+        });
+    }
+};
+
+// 7. Complete interview with quick status or remarks
+export const completeInterview = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const { notes = "", hiringDecision, advanceApplicationStatus } = req.body;
+
+        const interview = await Interview.findOne({ roomId });
+        if (!interview) {
+            return res.status(404).json({
+                message: "Interview room not found.",
+                success: false,
+            });
+        }
+
+        interview.status = "completed";
+        if (hiringDecision) {
+            interview.evaluation.hiringDecision = hiringDecision;
+        }
+        if (notes) {
+            interview.evaluation.interviewerFeedback = notes;
+            interview.evaluation.evaluatedAt = new Date();
+        }
+        await interview.save();
+
+        if (advanceApplicationStatus && interview.application) {
+            await Application.findByIdAndUpdate(interview.application, {
+                status: advanceApplicationStatus,
+            });
+        }
+
+        const updatedInterview = await Interview.findById(interview._id)
+            .populate("candidate", "fullname email phoneNumber profile")
+            .populate("recruiter", "fullname email")
+            .populate("job", "title location salary requirements")
+            .populate("company", "name logo location");
+
+        return res.status(200).json({
+            message: "Interview marked as completed successfully.",
+            success: true,
+            interview: updatedInterview,
+        });
+    } catch (error) {
+        console.error("Complete Interview Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to complete interview.",
+            success: false,
+        });
+    }
+};
+
+// 8. Sub-Users / Technical Interviewers Management for Recruiter
+export const getSubUsers = async (req, res) => {
+    try {
+        const recruiterId = req.id;
+        const recruiter = await User.findById(recruiterId);
+        if (!recruiter) {
+            return res.status(404).json({ message: "Recruiter not found.", success: false });
+        }
+
+        // Return recruiter's registered sub-users (or default preset if empty)
+        let subUsers = recruiter.subUsers || [];
+        if (subUsers.length === 0) {
+            // Provide sensible initial team member templates so recruiter immediately sees options
+            const initialMembers = [
+                {
+                    name: "Alex Rivera",
+                    email: "alex.rivera@eng.company.com",
+                    role: "Staff Backend Engineer",
+                    department: "Distributed Systems & Cloud",
+                    specialty: ["Node.js", "Go", "Kubernetes", "System Design"],
+                    phone: "+1-555-0192",
+                    createdAt: new Date(),
+                },
+                {
+                    name: "Priya Nair",
+                    email: "priya.nair@eng.company.com",
+                    role: "Senior Frontend Architect",
+                    department: "Web Platform & UI Core",
+                    specialty: ["React", "TypeScript", "Performance", "CSS/Web Standards"],
+                    phone: "+1-555-0144",
+                    createdAt: new Date(),
+                },
+                {
+                    name: "David Kim",
+                    email: "david.kim@eng.company.com",
+                    role: "Engineering Manager",
+                    department: "Product Engineering",
+                    specialty: ["System Architecture", "Behavioral & STAR", "Culture & Leadership"],
+                    phone: "+1-555-0177",
+                    createdAt: new Date(),
+                }
+            ];
+            recruiter.subUsers = initialMembers;
+            await recruiter.save();
+            subUsers = recruiter.subUsers;
+        }
+
+        return res.status(200).json({
+            success: true,
+            subUsers,
+        });
+    } catch (error) {
+        console.error("Get SubUsers Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to fetch technical interviewers.",
+            success: false,
+        });
+    }
+};
+
+export const addSubUser = async (req, res) => {
+    try {
+        const recruiterId = req.id;
+        const { name, email, role, department, specialty, phone } = req.body;
+
+        if (!name || !email) {
+            return res.status(400).json({
+                message: "Name and Email are required for technical interviewer.",
+                success: false,
+            });
+        }
+
+        const recruiter = await User.findById(recruiterId);
+        if (!recruiter) {
+            return res.status(404).json({ message: "Recruiter not found.", success: false });
+        }
+
+        const newSubUser = {
+            name,
+            email,
+            role: role || "Technical Interviewer",
+            department: department || "Engineering",
+            specialty: Array.isArray(specialty)
+                ? specialty
+                : specialty ? specialty.split(",").map((s) => s.trim()) : ["Coding", "System Design"],
+            phone: phone || "",
+            createdAt: new Date(),
+        };
+
+        recruiter.subUsers.push(newSubUser);
+        await recruiter.save();
+
+        return res.status(201).json({
+            message: `Technical interviewer ${name} added to your team.`,
+            success: true,
+            subUsers: recruiter.subUsers,
+            newSubUser: recruiter.subUsers[recruiter.subUsers.length - 1],
+        });
+    } catch (error) {
+        console.error("Add SubUser Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to add technical interviewer.",
+            success: false,
+        });
+    }
+};
+
+export const deleteSubUser = async (req, res) => {
+    try {
+        const recruiterId = req.id;
+        const { subUserId } = req.params;
+
+        const recruiter = await User.findById(recruiterId);
+        if (!recruiter) {
+            return res.status(404).json({ message: "Recruiter not found.", success: false });
+        }
+
+        recruiter.subUsers = recruiter.subUsers.filter(
+            (u) => u._id.toString() !== subUserId
+        );
+        await recruiter.save();
+
+        return res.status(200).json({
+            message: "Technical interviewer removed from your team.",
+            success: true,
+            subUsers: recruiter.subUsers,
+        });
+    } catch (error) {
+        console.error("Delete SubUser Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to delete technical interviewer.",
             success: false,
         });
     }

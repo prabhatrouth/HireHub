@@ -22,6 +22,19 @@ const interviewSchema = new mongoose.Schema(
             ref: "User",
             required: true,
         },
+        interviewerType: {
+            type: String,
+            enum: ["recruiter", "assigned_panelist"],
+            default: "recruiter",
+        },
+        assignedInterviewer: {
+            name: { type: String, default: "" },
+            email: { type: String, default: "" },
+            role: { type: String, default: "" },
+            department: { type: String, default: "" },
+            notes: { type: String, default: "" },
+            subUserId: { type: String, default: "" },
+        },
         company: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Company",
@@ -90,6 +103,7 @@ const interviewSchema = new mongoose.Schema(
             technicalScore: { type: Number, default: 0 },
             communicationScore: { type: Number, default: 0 },
             problemSolvingScore: { type: Number, default: 0 },
+            cultureFitScore: { type: Number, default: 0 },
             hiringDecision: {
                 type: String,
                 enum: ["Strong Hire", "Hire", "Leaning Hire", "Leaning No Hire", "No Hire", "Undecided"],

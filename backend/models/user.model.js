@@ -34,5 +34,16 @@ const userSchema = new mongoose.Schema({
             default:""
         }
     },
+    subUsers: [
+        {
+            name: { type: String, required: true },
+            email: { type: String, required: true },
+            role: { type: String, default: "Technical Interviewer" },
+            department: { type: String, default: "Engineering" },
+            specialty: [{ type: String }],
+            phone: { type: String, default: "" },
+            createdAt: { type: Date, default: Date.now }
+        }
+    ],
 },{timestamps:true});
 export const User = mongoose.model('User', userSchema);

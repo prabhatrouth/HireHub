@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -16,8 +16,14 @@ import {
     Briefcase,
     Building2,
     Users,
+    UserPlus,
     FileCode,
-    MessageSquare
+    MessageSquare,
+    ArrowRight,
+    UserCheck,
+    ChevronRight,
+    Layers,
+    Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -33,6 +39,15 @@ const ROUND_TYPES = [
     { value: 'Final Executive Round', label: 'Final Executive / Founder Round', duration: 45, icon: Video },
 ];
 
+const NEXT_ROUND_SUGGESTIONS = {
+    'Initial Screening': 'Technical Round',
+    'Technical Round': 'Live Coding & DSA',
+    'Live Coding & DSA': 'System Design',
+    'System Design': 'Behavioral & HR Round',
+    'Behavioral & HR Round': 'Final Executive Round',
+    'Final Executive Round': 'Technical Round',
+};
+
 const ScheduleInterviewDialog = ({
     isOpen,
     onOpenChange,
@@ -47,13 +62,13 @@ const ScheduleInterviewDialog = ({
     const applicationId = applicantData?._id;
 
     // Tomorrow as default date in YYYY-MM-DD
-    const getTomorrowDate = () => {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        return tomorrow.toISOString().split('T')[0];
+    const getTomorrowDate = (offsetDays = 1) => {
+        const d = new Date();
+        d.setDate(d.getDate() + offsetDays);
+        return d.toISOString().split('T')[0];
     };
 
-    const [interviewDate, setInterviewDate] = useState(getTomorrowDate());
+    const [interviewDate, setInterviewDate] = useState(getTomorrowDate(1));
     const [interviewTime, setInterviewTime] = useState('14:00');
     const [durationMinutes, setDurationMinutes] = useState(45);
     const [roundType, setRoundType] = useState('Technical Round');
@@ -62,6 +77,74 @@ const ScheduleInterviewDialog = ({
     );
     const [loading, setLoading] = useState(false);
     const [scheduledResult, setScheduledResult] = useState(null);
+
+    // Interviewer delegation state
+    const [interviewerType, setInterviewerType] = useState('recruiter'); // 'recruiter' | 'assigned_panelist'
+    const [subUsers, setSubUsers] = useState([]);
+    const [selectedSubUserId, setSelectedSubUserId] = useState('');
+    const [isAddingNewSubUser, setIsAddingNewSubUser] = useState(false);
+    const [newSubUserForm, setNewSubUserForm] = useState({
+        name: '',
+        email: '',
+        role: 'Senior Backend Engineer',
+        department: 'Engineering Core',
+    });
+
+    // Fetch recruiter's technical sub-users/interviewers
+    useEffect(() => {
+        if (isOpen) {
+            const fetchSubUsers = async () => {
+                try {
+                    axios.defaults.withCredentials = true;
+                    const res = await axios.get(`${INTERVIEW_API_END_POINT}/sub-users`);
+                    if (res.data?.success && Array.isArray(res.data.subUsers)) {
+                        setSubUsers(res.data.subUsers);
+                        setSelectedSubUserId((prev) => (prev ? prev : res.data.subUsers[0]?._id || ''));
+                    }
+                } catch (err) {
+                    console.warn('Could not fetch sub-users:', err);
+                }
+            };
+            fetchSubUsers();
+        }
+    }, [isOpen]);
+
+    const handleCreateInlineSubUser = async (e) => {
+        e.preventDefault();
+        if (!newSubUserForm.name || !newSubUserForm.email) {
+            toast.error('Name and work email are required.');
+            return;
+        }
+
+        try {
+            axios.defaults.withCredentials = true;
+            const res = await axios.post(`${INTERVIEW_API_END_POINT}/sub-users`, {
+                name: newSubUserForm.name,
+                email: newSubUserForm.email,
+                role: newSubUserForm.role,
+                department: newSubUserForm.department,
+            });
+
+            if (res.data?.success) {
+                toast.success(`Added ${newSubUserForm.name} to your interview panel!`);
+                const updatedList = res.data.subUsers || [];
+                setSubUsers(updatedList);
+                if (res.data.newSubUser) {
+                    setSelectedSubUserId(res.data.newSubUser._id);
+                }
+                setIsAddingNewSubUser(false);
+                setNewSubUserForm({
+                    name: '',
+                    email: '',
+                    role: 'Senior Backend Engineer',
+                    department: 'Engineering Core',
+                });
+            }
+        } catch (error) {
+            console.error('Add inline sub-user error:', error);
+            toast.error(error.response?.data?.message || 'Failed to add technical interviewer.');
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -73,6 +156,22 @@ const ScheduleInterviewDialog = ({
         if (!interviewDate || !interviewTime) {
             toast.error('Please select both date and time for the interview.');
             return;
+        }
+
+        let assignedInterviewerPayload = {};
+        if (interviewerType === 'assigned_panelist') {
+            const foundInterviewer = subUsers.find((u) => u._id === selectedSubUserId);
+            if (!foundInterviewer) {
+                toast.error('Please select or add a technical interviewer from your panel.');
+                return;
+            }
+            assignedInterviewerPayload = {
+                name: foundInterviewer.name,
+                email: foundInterviewer.email,
+                role: foundInterviewer.role,
+                department: foundInterviewer.department,
+                subUserId: foundInterviewer._id,
+            };
         }
 
         setLoading(true);
@@ -87,6 +186,8 @@ const ScheduleInterviewDialog = ({
                 durationMinutes: Number(durationMinutes),
                 roundType,
                 notes,
+                interviewerType,
+                assignedInterviewer: assignedInterviewerPayload,
             });
 
             if (res.data?.success) {
@@ -102,6 +203,20 @@ const ScheduleInterviewDialog = ({
         }
     };
 
+    // Auto-prompt / fast schedule next sequential round for same candidate
+    const handleScheduleNextRound = (suggestedRound) => {
+        setRoundType(suggestedRound);
+        const nextRoundConfig = ROUND_TYPES.find((r) => r.value === suggestedRound);
+        if (nextRoundConfig) {
+            setDurationMinutes(nextRoundConfig.duration);
+        }
+        // Offset date by 3 days from current selected date
+        setInterviewDate(getTomorrowDate(3));
+        setInterviewTime('15:00');
+        setNotes(`Round 2: ${suggestedRound} session with deep-dive technical evaluations and live problem solving.`);
+        setScheduledResult(null); // Return to form mode pre-filled with next round
+    };
+
     const copyMeetingLink = (roomId) => {
         const url = `${window.location.origin}/interview/room/${roomId}`;
         navigator.clipboard.writeText(url);
@@ -113,42 +228,51 @@ const ScheduleInterviewDialog = ({
         onOpenChange(false);
     };
 
+    const suggestedNextRound = scheduledResult
+        ? NEXT_ROUND_SUGGESTIONS[scheduledResult.roundType] || 'System Design'
+        : 'Technical Round';
+
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
             <DialogContent className="max-w-xl bg-white p-6 sm:p-7 rounded-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <div className="flex items-center gap-2 text-[#6A38C2]">
                         <Video className="w-5 h-5" />
-                        <span className="text-xs font-bold uppercase tracking-wider">In-Browser Video Interview</span>
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                            Interactive Video Interviewing & Delegation
+                        </span>
                     </div>
                     <DialogTitle className="text-lg sm:text-xl font-extrabold text-gray-900 mt-1">
                         Schedule Live Interview
                     </DialogTitle>
                     <DialogDescription className="text-xs text-gray-500">
-                        Schedule a real-time video interview with live screen sharing, collaborative coding, and AI rubrics.
+                        Set up in-browser video calls with live collaborative coding, AI-assisted rubrics, and technical interviewer delegation.
                     </DialogDescription>
                 </DialogHeader>
 
                 {scheduledResult ? (
-                    // Success View
-                    <div className="py-4 space-y-4">
-                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center">
-                            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-2.5">
+                    // Success View with Smart Next-Round Suggestion Prompt
+                    <div className="py-3 space-y-4 animate-in fade-in duration-200">
+                        <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-2xl text-center">
+                            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
                                 <Check className="w-6 h-6" />
                             </div>
                             <h4 className="text-base font-bold text-emerald-950">
                                 Interview Successfully Scheduled!
                             </h4>
                             <p className="text-xs text-emerald-800 mt-1">
-                                An in-browser interview room has been created for <span className="font-bold">{applicant.fullname}</span>.
+                                An in-browser interview room has been created for{' '}
+                                <span className="font-bold">{applicant.fullname}</span>.
                             </p>
                         </div>
 
                         {/* Meeting Details Box */}
-                        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-2 text-xs">
+                        <div className="p-4 bg-gray-50/90 border border-gray-200 rounded-xl space-y-2 text-xs">
                             <div className="flex justify-between py-1 border-b border-gray-200/80">
                                 <span className="text-gray-500">Candidate:</span>
-                                <span className="font-bold text-gray-900">{applicant.fullname} ({applicant.email})</span>
+                                <span className="font-bold text-gray-900">
+                                    {applicant.fullname} ({applicant.email})
+                                </span>
                             </div>
                             <div className="flex justify-between py-1 border-b border-gray-200/80">
                                 <span className="text-gray-500">Job Position:</span>
@@ -156,13 +280,48 @@ const ScheduleInterviewDialog = ({
                             </div>
                             <div className="flex justify-between py-1 border-b border-gray-200/80">
                                 <span className="text-gray-500">Date & Time:</span>
-                                <span className="font-bold text-purple-700">
-                                    {scheduledResult.interviewDate} at {scheduledResult.interviewTime} ({scheduledResult.durationMinutes} mins)
+                                <span className="font-bold text-[#6A38C2]">
+                                    {scheduledResult.interviewDate} at {scheduledResult.interviewTime} (
+                                    {scheduledResult.durationMinutes} mins)
                                 </span>
                             </div>
-                            <div className="flex justify-between py-1">
-                                <span className="text-gray-500">Round:</span>
+                            <div className="flex justify-between py-1 border-b border-gray-200/80">
+                                <span className="text-gray-500">Round Type:</span>
                                 <span className="font-bold text-gray-800">{scheduledResult.roundType}</span>
+                            </div>
+                            <div className="flex justify-between py-1">
+                                <span className="text-gray-500">Conducted By:</span>
+                                <span className="font-bold text-gray-900">
+                                    {scheduledResult.interviewerType === 'assigned_panelist' &&
+                                    scheduledResult.assignedInterviewer?.name
+                                        ? `${scheduledResult.assignedInterviewer.name} (${scheduledResult.assignedInterviewer.role || 'Panelist'})`
+                                        : 'Myself (Lead Recruiter)'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* SMART AUTOMATIC NEXT-ROUND SUGGESTION PROMPT */}
+                        <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200 rounded-2xl space-y-2.5">
+                            <div className="flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-[#6A38C2]" />
+                                <h5 className="text-xs font-extrabold text-purple-950 uppercase tracking-wide">
+                                    Next Step Suggestion for {applicant.fullname}
+                                </h5>
+                            </div>
+                            <p className="text-xs text-purple-900 leading-relaxed">
+                                Would you like to schedule the follow-up round (
+                                <span className="font-bold text-[#6A38C2]">{suggestedNextRound}</span>) for{' '}
+                                <span className="font-bold">{applicant.fullname}</span> now?
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <Button
+                                    size="sm"
+                                    onClick={() => handleScheduleNextRound(suggestedNextRound)}
+                                    className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-bold shadow-xs gap-1.5"
+                                >
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    Schedule Next Round ({suggestedNextRound}) for {applicant.fullname?.split(' ')[0]}
+                                </Button>
                             </div>
                         </div>
 
@@ -223,6 +382,105 @@ const ScheduleInterviewDialog = ({
                             </Badge>
                         </div>
 
+                        {/* Interview Host / Delegation (Who conducts interview?) */}
+                        <div className="p-3.5 bg-purple-50/40 border border-purple-100 rounded-xl space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                                    <UserCheck className="w-3.5 h-3.5 text-[#6A38C2]" />
+                                    Who will conduct this interview?
+                                </Label>
+                                <span className="text-[11px] text-purple-700 font-medium">Recruiter Delegation</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div
+                                    onClick={() => setInterviewerType('recruiter')}
+                                    className={`p-2.5 rounded-xl border cursor-pointer transition-all text-xs font-bold flex items-center gap-2 ${
+                                        interviewerType === 'recruiter'
+                                            ? 'bg-white border-[#6A38C2] text-[#6A38C2] ring-1 ring-[#6A38C2] shadow-2xs'
+                                            : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'
+                                    }`}
+                                >
+                                    <div className={`w-3 h-3 rounded-full border ${interviewerType === 'recruiter' ? 'border-[#6A38C2] bg-[#6A38C2]' : 'border-gray-400'}`} />
+                                    <span>Myself (Lead Recruiter)</span>
+                                </div>
+
+                                <div
+                                    onClick={() => setInterviewerType('assigned_panelist')}
+                                    className={`p-2.5 rounded-xl border cursor-pointer transition-all text-xs font-bold flex items-center gap-2 ${
+                                        interviewerType === 'assigned_panelist'
+                                            ? 'bg-white border-[#6A38C2] text-[#6A38C2] ring-1 ring-[#6A38C2] shadow-2xs'
+                                            : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'
+                                    }`}
+                                >
+                                    <div className={`w-3 h-3 rounded-full border ${interviewerType === 'assigned_panelist' ? 'border-[#6A38C2] bg-[#6A38C2]' : 'border-gray-400'}`} />
+                                    <span>Technical Interviewer / Sub-User</span>
+                                </div>
+                            </div>
+
+                            {/* Sub-user Selection dropdown & Quick Add */}
+                            {interviewerType === 'assigned_panelist' && (
+                                <div className="pt-2 border-t border-purple-100 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-semibold text-gray-700">
+                                            Select Assigned Technical Panelist:
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsAddingNewSubUser(!isAddingNewSubUser)}
+                                            className="text-[11px] font-bold text-[#6A38C2] hover:underline inline-flex items-center gap-1"
+                                        >
+                                            <UserPlus className="w-3 h-3" />
+                                            {isAddingNewSubUser ? 'Cancel' : '+ Add New Interviewer'}
+                                        </button>
+                                    </div>
+
+                                    {isAddingNewSubUser ? (
+                                        <div className="p-3 bg-white border border-purple-200 rounded-xl space-y-2.5 shadow-xs">
+                                            <p className="text-[11px] font-bold text-gray-900">Quick Add Panelist</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <Input
+                                                    placeholder="Full Name (e.g. Alex Rivera)"
+                                                    value={newSubUserForm.name}
+                                                    onChange={(e) => setNewSubUserForm({ ...newSubUserForm, name: e.target.value })}
+                                                    className="text-xs h-8 rounded-lg"
+                                                />
+                                                <Input
+                                                    type="email"
+                                                    placeholder="Work Email"
+                                                    value={newSubUserForm.email}
+                                                    onChange={(e) => setNewSubUserForm({ ...newSubUserForm, email: e.target.value })}
+                                                    className="text-xs h-8 rounded-lg"
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={handleCreateInlineSubUser}
+                                                    className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs h-7 px-3"
+                                                >
+                                                    Save & Assign
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <select
+                                            value={selectedSubUserId}
+                                            onChange={(e) => setSelectedSubUserId(e.target.value)}
+                                            className="w-full text-xs rounded-xl h-9 border border-gray-200 bg-white px-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        >
+                                            {subUsers.map((su) => (
+                                                <option key={su._id} value={su._id}>
+                                                    {su.name} — {su.role} ({su.department || 'Engineering'})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Round Selection */}
                         <div>
                             <Label className="text-xs font-bold text-gray-700 block mb-1.5">
@@ -245,7 +503,11 @@ const ScheduleInterviewDialog = ({
                                                     : 'bg-white border-gray-200 hover:border-purple-200 hover:bg-purple-50/20'
                                             }`}
                                         >
-                                            <div className={`p-1.5 rounded-lg shrink-0 ${isSelected ? 'bg-[#6A38C2] text-white' : 'bg-gray-100 text-gray-600'}`}>
+                                            <div
+                                                className={`p-1.5 rounded-lg shrink-0 ${
+                                                    isSelected ? 'bg-[#6A38C2] text-white' : 'bg-gray-100 text-gray-600'
+                                                }`}
+                                            >
                                                 <Icon className="w-3.5 h-3.5" />
                                             </div>
                                             <div className="min-w-0 flex-1">
@@ -317,7 +579,7 @@ const ScheduleInterviewDialog = ({
                             </Label>
                             <textarea
                                 id="notes"
-                                rows={3}
+                                rows={2}
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
                                 placeholder="Add specific technical topics, live coding prep instructions, or meeting agenda..."
@@ -348,7 +610,7 @@ const ScheduleInterviewDialog = ({
                                 ) : (
                                     <>
                                         <Video className="w-3.5 h-3.5 mr-1.5" />
-                                        Confirm & Send Invite
+                                        Confirm & Schedule Interview
                                     </>
                                 )}
                             </Button>
