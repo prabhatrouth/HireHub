@@ -62,7 +62,7 @@ const appRouter = createBrowserRouter([
       },
       {
         path: "/student/portal",
-        element: <StudentPortal />
+        element: <ProtectedRoute allowedRoles={['student', 'recruiter']}><StudentPortal /></ProtectedRoute>
       },
       {
         path: "/description/:id",
@@ -74,40 +74,40 @@ const appRouter = createBrowserRouter([
       },
       {
         path: "/profile",
-        element: <Profile />
+        element: <ProtectedRoute allowedRoles={['student', 'recruiter']}><Profile /></ProtectedRoute>
       },
       // recruiter / admin routes
       {
         path: "/admin/portal",
-        element: <ProtectedRoute><RecruiterPortal /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']}><RecruiterPortal /></ProtectedRoute>
       },
       {
         path: "/admin/companies",
-        element: <ProtectedRoute><Companies /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']}><Companies /></ProtectedRoute>
       },
       {
         path: "/admin/companies/create",
-        element: <ProtectedRoute><CompanyCreate /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']}><CompanyCreate /></ProtectedRoute>
       },
       {
         path: "/admin/companies/:id",
-        element: <ProtectedRoute><CompanySetup /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']}><CompanySetup /></ProtectedRoute>
       },
       {
         path: "/admin/jobs",
-        element: <ProtectedRoute><AdminJobs /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']}><AdminJobs /></ProtectedRoute>
       },
       {
         path: "/admin/jobs/create",
-        element: <ProtectedRoute><PostJob /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']}><PostJob /></ProtectedRoute>
       },
       {
         path: "/admin/jobs/:id/applicants",
-        element: <ProtectedRoute><Applicants /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']}><Applicants /></ProtectedRoute>
       },
       {
         path: "/interview/room/:roomId",
-        element: <ProtectedRoute><LiveInterviewRoom /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter', 'student']}><LiveInterviewRoom /></ProtectedRoute>
       },
     ]
   }

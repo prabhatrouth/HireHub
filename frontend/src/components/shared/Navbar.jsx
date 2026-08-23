@@ -17,7 +17,10 @@ import {
     Video,
     ChevronDown,
     Layers,
-    Bot
+    Bot,
+    Users,
+    UserCheck,
+    Shield
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -89,9 +92,9 @@ const Navbar = () => {
                                 <Link
                                     to="/admin/portal"
                                     className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        isActive('/admin/portal') && !location.search.includes('tab=interviews')
+                                        isActive('/admin/portal') && !location.search.includes('tab=interviews') && !location.search.includes('tab=interviewers')
                                             ? 'bg-purple-50 text-[#6A38C2]'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                                     }`}
                                 >
                                     <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
@@ -107,6 +110,17 @@ const Navbar = () => {
                                 >
                                     <Video className="w-3.5 h-3.5 text-rose-500" />
                                     Live Interviews
+                                </Link>
+                                <Link
+                                    to="/admin/portal?tab=interviewers"
+                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                        location.search.includes('tab=interviewers')
+                                            ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                            : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
+                                    }`}
+                                >
+                                    <Users className="w-3.5 h-3.5 text-indigo-600" />
+                                    Sub-Users & Panel
                                 </Link>
                                 <Link
                                     to="/admin/companies"
@@ -271,6 +285,13 @@ const Navbar = () => {
                                                         <span>Live Video Interviews</span>
                                                     </Link>
                                                     <Link
+                                                        to="/admin/portal?tab=interviewers"
+                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl transition-colors"
+                                                    >
+                                                        <Users className="w-4 h-4 text-indigo-600" />
+                                                        <span>Manage Sub-Users & Panel</span>
+                                                    </Link>
+                                                    <Link
                                                         to="/admin/jobs/create"
                                                         className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
                                                     >
@@ -364,6 +385,14 @@ const Navbar = () => {
                                 >
                                     <Video className="w-4 h-4 text-rose-500" />
                                     <span>Live Video Interviews</span>
+                                </Link>
+                                <Link
+                                    to="/admin/portal?tab=interviewers"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50/70"
+                                >
+                                    <Users className="w-4 h-4 text-indigo-600" />
+                                    <span>Manage Sub-Users & Panel</span>
                                 </Link>
                                 <Link
                                     to="/admin/companies"

@@ -451,6 +451,7 @@ const ScheduleInterviewDialog = ({
                                                         <option value="System Design Specialist">System Design Specialist</option>
                                                         <option value="Engineering Manager">Engineering Manager</option>
                                                         <option value="HR / Culture Interviewer">HR / Culture Interviewer</option>
+                                                        <option value="Domain Subject Matter Expert">Domain Subject Matter Expert</option>
                                                     </select>
                                                 </div>
                                                 <div>
@@ -483,6 +484,21 @@ const ScheduleInterviewDialog = ({
                                                     Create & Assign
                                                 </Button>
                                             </div>
+                                        </div>
+                                    ) : subUsers.length === 0 ? (
+                                        <div className="p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl text-center space-y-2">
+                                            <p className="text-xs text-amber-900 font-medium">
+                                                You haven't created any sub-user panelists yet.
+                                            </p>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => setIsAddingNewSubUser(true)}
+                                                className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs h-8 px-3 font-semibold rounded-lg shadow-xs"
+                                            >
+                                                <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                                                Add First Technical Interviewer
+                                            </Button>
                                         </div>
                                     ) : (
                                         <select
