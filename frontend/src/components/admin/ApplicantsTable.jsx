@@ -625,7 +625,12 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
             {/* Schedule Interview Modal Dialog */}
             <ScheduleInterviewDialog
                 isOpen={isScheduleModalOpen}
-                onOpenChange={setIsScheduleModalOpen}
+                onOpenChange={(open) => {
+                    setIsScheduleModalOpen(open);
+                    if (!open) {
+                        setInterviewApplicant(null);
+                    }
+                }}
                 applicantData={interviewApplicant}
                 jobData={jobData || (interviewApplicant ? { _id: interviewApplicant.job?._id || interviewApplicant.job, title: interviewApplicant.job?.title } : null)}
                 onSuccess={() => {

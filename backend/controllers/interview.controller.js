@@ -967,6 +967,7 @@ export const addSubUser = async (req, res) => {
                     },
                 });
             } else {
+                subUserAccount.password = hashedPassword;
                 subUserAccount.isSubUser = true;
                 subUserAccount.parentRecruiter = recruiterId;
                 subUserAccount.subRole = role;
@@ -1022,7 +1023,8 @@ export const addSubUser = async (req, res) => {
             if (!recruiter.subUsers) recruiter.subUsers = [];
             recruiter.subUsers.push(newSubUser);
 
-            // Also add mock user account
+            // Also add/update mock user account
+            const existingMockUserIndex = mockStore.users.findIndex((u) => u.email?.toLowerCase() === email.toLowerCase());
             const newMockUser = {
                 _id: newSubUserId,
                 fullname: name,
@@ -1042,7 +1044,15 @@ export const addSubUser = async (req, res) => {
                     profilePhoto: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
                 },
             };
-            mockStore.users.push(newMockUser);
+            if (existingMockUserIndex >= 0) {
+                mockStore.users[existingMockUserIndex] = {
+                    ...mockStore.users[existingMockUserIndex],
+                    ...newMockUser,
+                    _id: mockStore.users[existingMockUserIndex]._id,
+                };
+            } else {
+                mockStore.users.push(newMockUser);
+            }
 
             return res.status(201).json({
                 message: `Team member ${name} (${role}) added successfully with custom permissions.`,

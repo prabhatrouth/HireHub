@@ -86,7 +86,8 @@ const ScheduleInterviewDialog = ({
     const [newSubUserForm, setNewSubUserForm] = useState({
         name: '',
         email: '',
-        role: 'Senior Backend Engineer',
+        password: 'Demo@123',
+        role: 'Technical Interviewer',
         department: 'Engineering Core',
     });
 
@@ -121,12 +122,13 @@ const ScheduleInterviewDialog = ({
             const res = await axios.post(`${INTERVIEW_API_END_POINT}/sub-users`, {
                 name: newSubUserForm.name,
                 email: newSubUserForm.email,
+                password: newSubUserForm.password || 'Demo@123',
                 role: newSubUserForm.role,
                 department: newSubUserForm.department,
             });
 
             if (res.data?.success) {
-                toast.success(`Added ${newSubUserForm.name} to your interview panel!`);
+                toast.success(`Added ${newSubUserForm.name} (${newSubUserForm.role}) with login password!`);
                 const updatedList = res.data.subUsers || [];
                 setSubUsers(updatedList);
                 if (res.data.newSubUser) {
@@ -136,7 +138,8 @@ const ScheduleInterviewDialog = ({
                 setNewSubUserForm({
                     name: '',
                     email: '',
-                    role: 'Senior Backend Engineer',
+                    password: 'Demo@123',
+                    role: 'Technical Interviewer',
                     department: 'Engineering Core',
                 });
             }
@@ -191,7 +194,7 @@ const ScheduleInterviewDialog = ({
             });
 
             if (res.data?.success) {
-                toast.success(res.data.message || 'Interview scheduled successfully!');
+                toast.success(res.data.message || `Interview scheduled successfully with ${applicant.fullname || 'candidate'}!`);
                 setScheduledResult(res.data.interview);
                 if (onSuccess) onSuccess(res.data.interview);
             }
@@ -201,20 +204,6 @@ const ScheduleInterviewDialog = ({
         } finally {
             setLoading(false);
         }
-    };
-
-    // Auto-prompt / fast schedule next sequential round for same candidate
-    const handleScheduleNextRound = (suggestedRound) => {
-        setRoundType(suggestedRound);
-        const nextRoundConfig = ROUND_TYPES.find((r) => r.value === suggestedRound);
-        if (nextRoundConfig) {
-            setDurationMinutes(nextRoundConfig.duration);
-        }
-        // Offset date by 3 days from current selected date
-        setInterviewDate(getTomorrowDate(3));
-        setInterviewTime('15:00');
-        setNotes(`Round 2: ${suggestedRound} session with deep-dive technical evaluations and live problem solving.`);
-        setScheduledResult(null); // Return to form mode pre-filled with next round
     };
 
     const copyMeetingLink = (roomId) => {
@@ -228,12 +217,12 @@ const ScheduleInterviewDialog = ({
         onOpenChange(false);
     };
 
-    const suggestedNextRound = scheduledResult
-        ? NEXT_ROUND_SUGGESTIONS[scheduledResult.roundType] || 'System Design'
-        : 'Technical Round';
-
     return (
-        <Dialog open={isOpen} onOpenChange={handleClose}>
+        <Dialog open={isOpen} onOpenChange={(open) => {
+            if (!open) {
+                handleClose();
+            }
+        }}>
             <DialogContent className="max-w-xl bg-white p-6 sm:p-7 rounded-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <div className="flex items-center gap-2 text-[#6A38C2]">
@@ -243,15 +232,17 @@ const ScheduleInterviewDialog = ({
                         </span>
                     </div>
                     <DialogTitle className="text-lg sm:text-xl font-extrabold text-gray-900 mt-1">
-                        Schedule Live Interview
+                        {scheduledResult ? 'Interview Scheduled Successfully' : 'Schedule Live Interview'}
                     </DialogTitle>
                     <DialogDescription className="text-xs text-gray-500">
-                        Set up in-browser video calls with live collaborative coding, AI-assisted rubrics, and technical interviewer delegation.
+                        {scheduledResult 
+                            ? 'Interview room has been created. The session is assigned and visible on the interviewer dashboard.' 
+                            : 'Set up in-browser video calls with live collaborative coding, AI rubrics, and technical interviewer delegation.'}
                     </DialogDescription>
                 </DialogHeader>
 
                 {scheduledResult ? (
-                    // Success View with Smart Next-Round Suggestion Prompt
+                    // Clean, finalized success confirmation screen (No auto-reopen/looping)
                     <div className="py-3 space-y-4 animate-in fade-in duration-200">
                         <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-2xl text-center">
                             <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
@@ -261,7 +252,7 @@ const ScheduleInterviewDialog = ({
                                 Interview Successfully Scheduled!
                             </h4>
                             <p className="text-xs text-emerald-800 mt-1">
-                                An in-browser interview room has been created for{' '}
+                                An in-browser interview room is ready for{' '}
                                 <span className="font-bold">{applicant.fullname}</span>.
                             </p>
                         </div>
@@ -290,38 +281,13 @@ const ScheduleInterviewDialog = ({
                                 <span className="font-bold text-gray-800">{scheduledResult.roundType}</span>
                             </div>
                             <div className="flex justify-between py-1">
-                                <span className="text-gray-500">Conducted By:</span>
+                                <span className="text-gray-500">Assigned Evaluator:</span>
                                 <span className="font-bold text-gray-900">
                                     {scheduledResult.interviewerType === 'assigned_panelist' &&
                                     scheduledResult.assignedInterviewer?.name
                                         ? `${scheduledResult.assignedInterviewer.name} (${scheduledResult.assignedInterviewer.role || 'Panelist'})`
                                         : 'Myself (Lead Recruiter)'}
                                 </span>
-                            </div>
-                        </div>
-
-                        {/* SMART AUTOMATIC NEXT-ROUND SUGGESTION PROMPT */}
-                        <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200 rounded-2xl space-y-2.5">
-                            <div className="flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-[#6A38C2]" />
-                                <h5 className="text-xs font-extrabold text-purple-950 uppercase tracking-wide">
-                                    Next Step Suggestion for {applicant.fullname}
-                                </h5>
-                            </div>
-                            <p className="text-xs text-purple-900 leading-relaxed">
-                                Would you like to schedule the follow-up round (
-                                <span className="font-bold text-[#6A38C2]">{suggestedNextRound}</span>) for{' '}
-                                <span className="font-bold">{applicant.fullname}</span> now?
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <Button
-                                    size="sm"
-                                    onClick={() => handleScheduleNextRound(suggestedNextRound)}
-                                    className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-bold shadow-xs gap-1.5"
-                                >
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    Schedule Next Round ({suggestedNextRound}) for {applicant.fullname?.split(' ')[0]}
-                                </Button>
                             </div>
                         </div>
 
@@ -345,13 +311,18 @@ const ScheduleInterviewDialog = ({
                         </div>
 
                         <div className="flex items-center justify-end gap-2.5 pt-2">
-                            <Button variant="outline" onClick={handleClose} className="text-xs border-gray-200">
+                            <Button 
+                                variant="outline" 
+                                onClick={handleClose} 
+                                className="text-xs border-gray-300 font-semibold text-gray-700 hover:bg-gray-100"
+                            >
                                 Done & Close
                             </Button>
                             <Button
                                 onClick={() => {
+                                    const rId = scheduledResult.roomId;
                                     handleClose();
-                                    navigate(`/interview/room/${scheduledResult.roomId}`);
+                                    navigate(`/interview/room/${rId}`);
                                 }}
                                 className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-semibold shadow-xs"
                             >
@@ -437,30 +408,75 @@ const ScheduleInterviewDialog = ({
 
                                     {isAddingNewSubUser ? (
                                         <div className="p-3 bg-white border border-purple-200 rounded-xl space-y-2.5 shadow-xs">
-                                            <p className="text-[11px] font-bold text-gray-900">Quick Add Panelist</p>
+                                            <p className="text-[11px] font-bold text-gray-900 flex items-center justify-between">
+                                                <span>Quick Add Interviewer Member</span>
+                                                <span className="text-[10px] text-purple-600 font-normal">Sets direct login password</span>
+                                            </p>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                <Input
-                                                    placeholder="Full Name (e.g. Alex Rivera)"
-                                                    value={newSubUserForm.name}
-                                                    onChange={(e) => setNewSubUserForm({ ...newSubUserForm, name: e.target.value })}
-                                                    className="text-xs h-8 rounded-lg"
-                                                />
-                                                <Input
-                                                    type="email"
-                                                    placeholder="Work Email"
-                                                    value={newSubUserForm.email}
-                                                    onChange={(e) => setNewSubUserForm({ ...newSubUserForm, email: e.target.value })}
-                                                    className="text-xs h-8 rounded-lg"
-                                                />
+                                                <div>
+                                                    <label className="text-[10px] text-gray-500 font-semibold block mb-0.5">Full Name</label>
+                                                    <Input
+                                                        placeholder="e.g. Alex Rivera"
+                                                        value={newSubUserForm.name}
+                                                        onChange={(e) => setNewSubUserForm({ ...newSubUserForm, name: e.target.value })}
+                                                        className="text-xs h-8 rounded-lg"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-gray-500 font-semibold block mb-0.5">Work Email</label>
+                                                    <Input
+                                                        type="email"
+                                                        placeholder="alex@company.com"
+                                                        value={newSubUserForm.email}
+                                                        onChange={(e) => setNewSubUserForm({ ...newSubUserForm, email: e.target.value })}
+                                                        className="text-xs h-8 rounded-lg"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] text-gray-500 font-semibold block mb-0.5">Interviewer Role</label>
+                                                    <select
+                                                        value={newSubUserForm.role}
+                                                        onChange={(e) => setNewSubUserForm({ ...newSubUserForm, role: e.target.value })}
+                                                        className="w-full text-xs rounded-lg h-8 border border-gray-200 bg-white px-2 text-gray-900"
+                                                    >
+                                                        <option value="Technical Interviewer">Technical Interviewer</option>
+                                                        <option value="Senior Backend Engineer">Senior Backend Engineer</option>
+                                                        <option value="Senior Frontend Engineer">Senior Frontend Engineer</option>
+                                                        <option value="System Design Specialist">System Design Specialist</option>
+                                                        <option value="Engineering Manager">Engineering Manager</option>
+                                                        <option value="HR / Culture Interviewer">HR / Culture Interviewer</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-gray-500 font-semibold block mb-0.5">Login Password</label>
+                                                    <Input
+                                                        type="text"
+                                                        placeholder="Set Password (e.g. Demo@123)"
+                                                        value={newSubUserForm.password}
+                                                        onChange={(e) => setNewSubUserForm({ ...newSubUserForm, password: e.target.value })}
+                                                        className="text-xs h-8 rounded-lg font-mono"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-end gap-2 pt-1">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => setIsAddingNewSubUser(false)}
+                                                    className="text-xs h-7 px-2 text-gray-500"
+                                                >
+                                                    Cancel
+                                                </Button>
                                                 <Button
                                                     type="button"
                                                     size="sm"
                                                     onClick={handleCreateInlineSubUser}
-                                                    className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs h-7 px-3"
+                                                    className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs h-7 px-3 font-semibold"
                                                 >
-                                                    Save & Assign
+                                                    Create & Assign
                                                 </Button>
                                             </div>
                                         </div>

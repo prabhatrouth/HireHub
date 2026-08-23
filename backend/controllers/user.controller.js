@@ -125,10 +125,13 @@ export const login = async (req, res) => {
         }
 
         if (role !== user.role) {
-            return res.status(400).json({
-                message: "Account doesn't exist with current role.",
-                success: false,
-            });
+            // If user is a technical interviewer/subUser created by a recruiter, permit login seamlessly
+            if (!user.isSubUser && !user.parentRecruiter) {
+                return res.status(400).json({
+                    message: `Account registered as ${user.role}. Please select the correct role tab to continue.`,
+                    success: false,
+                });
+            }
         }
 
         const tokenData = {
