@@ -1318,7 +1318,7 @@ const LiveInterviewRoom = () => {
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
                                                 <div className="flex justify-between text-xs font-bold">
-                                                    <span>Code</span>
+                                                    <span>Domain Depth</span>
                                                     <span className="text-purple-400">{technicalScore} / 5</span>
                                                 </div>
                                                 <input
@@ -1333,7 +1333,7 @@ const LiveInterviewRoom = () => {
 
                                             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
                                                 <div className="flex justify-between text-xs font-bold">
-                                                    <span>DSA</span>
+                                                    <span>Problem Solving</span>
                                                     <span className="text-purple-400">{problemSolvingScore} / 5</span>
                                                 </div>
                                                 <input
@@ -1348,7 +1348,7 @@ const LiveInterviewRoom = () => {
 
                                             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
                                                 <div className="flex justify-between text-xs font-bold">
-                                                    <span>Design</span>
+                                                    <span>Execution & Process</span>
                                                     <span className="text-purple-400">{systemDesignScore} / 5</span>
                                                 </div>
                                                 <input
@@ -1363,7 +1363,7 @@ const LiveInterviewRoom = () => {
 
                                             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
                                                 <div className="flex justify-between text-xs font-bold">
-                                                    <span>Comm</span>
+                                                    <span>Communication</span>
                                                     <span className="text-purple-400">{communicationScore} / 5</span>
                                                 </div>
                                                 <input

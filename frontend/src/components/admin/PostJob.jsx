@@ -11,9 +11,23 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Briefcase, Sparkles, Building2, ArrowLeft, Wand2 } from 'lucide-react';
 
+const INDUSTRY_DOMAINS = [
+    "Technology & Software",
+    "Healthcare & Medical",
+    "Finance, Banking & Accounting",
+    "Marketing, Sales & Growth",
+    "Operations & Supply Chain",
+    "Human Resources & Legal",
+    "Design & Creative Media",
+    "Education & Training",
+    "Customer Service & Success",
+    "Executive & General Management"
+];
+
 const PostJob = () => {
     const [input, setInput] = useState({
         title: "",
+        industry: "Technology & Software",
         description: "",
         requirements: "",
         salary: "",
@@ -40,6 +54,13 @@ const PostJob = () => {
         });
     };
 
+    const industryChangeHandler = (val) => {
+        setInput({
+            ...input,
+            industry: val
+        });
+    };
+
     // AI Job Auto-Complete & Enhancer
     const handleAiGenerate = async () => {
         if (!input.title.trim()) {
@@ -56,6 +77,7 @@ const PostJob = () => {
                 `${AI_API_END_POINT}/generate-job-description`,
                 {
                     title: input.title,
+                    industry: input.industry,
                     companyName: selectedCompany?.name || "",
                     location: input.location || "",
                     jobType: input.jobType || "Full-time",
@@ -142,7 +164,7 @@ const PostJob = () => {
                                 Post a New Job Opportunity
                             </h1>
                             <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-                                Create a listing with AI candidate skill scoring enabled
+                                Create listings across any industry with AI candidate skill scoring enabled
                             </p>
                         </div>
                     </div>
@@ -174,10 +196,29 @@ const PostJob = () => {
                                     name="title"
                                     value={input.title}
                                     onChange={changeEventHandler}
-                                    placeholder="e.g. Senior Full Stack Engineer"
+                                    placeholder="e.g. Clinical Nurse / Financial Analyst / Marketing Lead / Full Stack Dev"
                                     required
                                     className="mt-1 text-sm bg-gray-50/50 border-gray-200"
                                 />
+                            </div>
+
+                            {/* Industry Domain */}
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Industry / Career Domain</Label>
+                                <Select value={input.industry} onValueChange={industryChangeHandler}>
+                                    <SelectTrigger className="mt-1 w-full text-sm bg-gray-50/50 border-gray-200">
+                                        <SelectValue placeholder="Select Industry Domain" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectGroup>
+                                            {INDUSTRY_DOMAINS.map((domain) => (
+                                                <SelectItem key={domain} value={domain}>
+                                                    {domain}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             {/* Company Selector */}
@@ -208,26 +249,6 @@ const PostJob = () => {
                                 )}
                             </div>
 
-                            {/* Requirements (Crucial for AI evaluation) */}
-                            <div className="sm:col-span-2">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                                        <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
-                                        Key Skill Requirements (Comma separated)
-                                    </Label>
-                                    <span className="text-[11px] text-[#6A38C2] font-semibold">Powers AI Applicant Ranking</span>
-                                </div>
-                                <Input
-                                    type="text"
-                                    name="requirements"
-                                    value={input.requirements}
-                                    onChange={changeEventHandler}
-                                    placeholder="e.g. React, TypeScript, Node.js, Tailwind CSS, REST APIs"
-                                    required
-                                    className="mt-1 text-sm bg-purple-50/20 border-purple-200 focus-visible:border-[#6A38C2]"
-                                />
-                            </div>
-
                             {/* Location */}
                             <div>
                                 <Label className="text-xs font-semibold text-gray-700">Location</Label>
@@ -236,15 +257,35 @@ const PostJob = () => {
                                     name="location"
                                     value={input.location}
                                     onChange={changeEventHandler}
-                                    placeholder="e.g. Remote / Bangalore, India"
+                                    placeholder="e.g. Remote / Bangalore / Mumbai / New York"
                                     required
                                     className="mt-1 text-sm bg-gray-50/50 border-gray-200"
                                 />
                             </div>
 
+                            {/* Requirements (Crucial for AI evaluation) */}
+                            <div className="sm:col-span-2">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
+                                        Key Competency & Skill Requirements (Comma separated)
+                                    </Label>
+                                    <span className="text-[11px] text-[#6A38C2] font-semibold">Powers AI Applicant Ranking</span>
+                                </div>
+                                <Input
+                                    type="text"
+                                    name="requirements"
+                                    value={input.requirements}
+                                    onChange={changeEventHandler}
+                                    placeholder="e.g. Financial Modeling, Excel, Risk Analysis, Valuation (or) Patient Care, ICU, EHR (or) React, Node.js"
+                                    required
+                                    className="mt-1 text-sm bg-purple-50/20 border-purple-200 focus-visible:border-[#6A38C2]"
+                                />
+                            </div>
+
                             {/* Salary */}
                             <div>
-                                <Label className="text-xs font-semibold text-gray-700">Salary (LPA)</Label>
+                                <Label className="text-xs font-semibold text-gray-700">Salary (LPA / Annual Range)</Label>
                                 <Input
                                     type="number"
                                     name="salary"
@@ -306,7 +347,7 @@ const PostJob = () => {
                                     name="description"
                                     value={input.description}
                                     onChange={changeEventHandler}
-                                    placeholder="Describe the day-to-day responsibilities, ideal candidate background, and growth opportunities..."
+                                    placeholder="Describe the day-to-day responsibilities, core domain deliverables, ideal candidate background, and growth opportunities..."
                                     required
                                     rows={5}
                                     className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50/50 p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#6A38C2] focus:border-[#6A38C2]"

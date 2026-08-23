@@ -36,23 +36,28 @@ import { INTERVIEW_API_END_POINT } from '@/utils/constant';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 
 const PRESET_ROLES = [
-    'Technical Interviewer',
-    'Senior Backend Architect',
-    'Senior Frontend Architect',
-    'Fullstack Tech Lead',
-    'Engineering Manager',
-    'DevOps & Cloud Specialist',
-    'System Design Specialist',
-    'HR & Behavioral Specialist',
+    'Domain Subject Matter Expert',
+    'Clinical & Medical Evaluator',
+    'Senior Financial Analyst / Auditor',
+    'Marketing & Growth Lead',
+    'Technical Lead / Architect',
+    'Supply Chain & Operations Manager',
+    'Creative & Design Director',
+    'HR & Cultural Alignment Evaluator',
+    'Sales & Commercial Lead',
+    'Executive & General Hiring Manager',
 ];
 
 const PRESET_DEPARTMENTS = [
-    'Engineering Core',
-    'Cloud & Infrastructure',
-    'Web & Mobile Platform',
-    'Product Engineering',
-    'Security & Reliability',
-    'People & Talent Operations',
+    'Engineering & Technology',
+    'Healthcare & Clinical Sciences',
+    'Finance, Accounting & Risk',
+    'Marketing, Growth & Brand',
+    'Operations, Supply Chain & Logistics',
+    'Creative, UI/UX & Product Design',
+    'Human Resources, Talent & Legal',
+    'Commercial Sales & Client Success',
+    'Executive Leadership',
 ];
 
 const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = false }) => {
@@ -252,9 +257,9 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
             ) : subUsers.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-slate-200/80 p-10 text-center">
                     <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                    <h3 className="text-base font-bold text-slate-900">No Technical Interviewers Added Yet</h3>
+                    <h3 className="text-base font-bold text-slate-900">No Interview Panel Members Added Yet</h3>
                     <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto mb-4">
-                        Add colleagues and domain experts so you can delegate live technical rounds and code reviews effortlessly.
+                        Add team members, subject matter experts, and domain specialists to delegate interviews and live evaluations across any job category.
                     </p>
                     <Button
                         onClick={() => setIsAddOpen(true)}

@@ -5,7 +5,7 @@ import { useDispatch } from 'react-redux';
 import { setSearchedQuery } from '@/redux/jobSlice';
 import { useNavigate, Link } from 'react-router-dom';
 
-const quickTags = ['Frontend', 'FullStack', 'React', 'Node.js', 'Python', 'Remote', 'AI / ML', 'DevOps'];
+const quickTags = ['Healthcare', 'Finance', 'Software', 'Marketing', 'Operations', 'Sales', 'Design', 'HR', 'Remote'];
 
 const HeroSection = () => {
     const [query, setQuery] = useState('');
@@ -37,12 +37,12 @@ const HeroSection = () => {
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-[#6A38C2]"></span>
                     </span>
-                    <span>Intelligent AI-Powered Job Matching & Live Video Hiring</span>
+                    <span>Intelligent AI-Powered Job Matching & Live Video Hiring for All Industries</span>
                 </div>
 
                 {/* Main Heading */}
                 <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.15] mb-5 sm:mb-6">
-                    Land Your Next Career Move with{' '}
+                    Hire and Get Hired Across Any Field with{' '}
                     <span className="bg-gradient-to-r from-[#6A38C2] via-purple-600 to-[#F83002] bg-clip-text text-transparent">
                         AI Precision
                     </span>
@@ -50,7 +50,7 @@ const HeroSection = () => {
 
                 {/* Subtitle */}
                 <p className="text-sm sm:text-lg text-slate-600 max-w-2xl mx-auto mb-8 sm:mb-10 leading-relaxed font-normal">
-                    Automated ATS resume scoring, smart skill verification, and instant recommendations matching high-growth tech talent with leading companies.
+                    Automated ATS resume auditing, smart cross-industry skill matching, and live collaborative interview rooms for Healthcare, Finance, Marketing, Engineering, Operations, and beyond.
                 </p>
 
                 {/* Search Bar */}
@@ -60,7 +60,7 @@ const HeroSection = () => {
                             <Search className="h-5 w-5 shrink-0 text-slate-400" />
                             <input
                                 type="text"
-                                placeholder="Search by job title, skill (React, Python), or company..."
+                                placeholder="Search by job role, industry, skill (Marketing, Finance, React), or company..."
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 onKeyDown={handleKeyDown}

@@ -31,21 +31,25 @@ import { INTERVIEW_API_END_POINT } from '@/utils/constant';
 import { useNavigate } from 'react-router-dom';
 
 const ROUND_TYPES = [
-    { value: 'Initial Screening', label: 'Initial Screening (Recruiter Call)', duration: 30, icon: Users },
-    { value: 'Technical Round', label: 'Technical Round (Architecture & Core)', duration: 45, icon: Briefcase },
-    { value: 'Live Coding & DSA', label: 'Live Coding & DSA (Interactive Code)', duration: 60, icon: FileCode },
-    { value: 'System Design', label: 'System Design & High Level Infra', duration: 60, icon: Sparkles },
-    { value: 'Behavioral & HR Round', label: 'Behavioral & HR Cultural Fit', duration: 45, icon: MessageSquare },
-    { value: 'Final Executive Round', label: 'Final Executive / Founder Round', duration: 45, icon: Video },
+    { value: 'Initial Screening', label: 'Initial Screening & Background Review', duration: 30, icon: Users },
+    { value: 'Domain Competency', label: 'Domain Competency & Subject Matter Evaluation', duration: 45, icon: Briefcase },
+    { value: 'Case Study & Scenario', label: 'Case Study, Scenario & Strategy Assessment', duration: 60, icon: Sparkles },
+    { value: 'Portfolio & Presentation', label: 'Portfolio, Project & Presentation Review', duration: 45, icon: Layers },
+    { value: 'Sales & Client Simulation', label: 'Sales Pitch & Client Negotiation Simulation', duration: 45, icon: MessageSquare },
+    { value: 'Live Technical & Problem Solving', label: 'Live Technical & Analytical Problem Solving', duration: 60, icon: FileCode },
+    { value: 'Behavioral & Cultural Fit', label: 'Behavioral & Cultural Alignment (STAR)', duration: 45, icon: MessageSquare },
+    { value: 'Final Executive Round', label: 'Final Executive / Stakeholder Round', duration: 45, icon: Video },
 ];
 
 const NEXT_ROUND_SUGGESTIONS = {
-    'Initial Screening': 'Technical Round',
-    'Technical Round': 'Live Coding & DSA',
-    'Live Coding & DSA': 'System Design',
-    'System Design': 'Behavioral & HR Round',
-    'Behavioral & HR Round': 'Final Executive Round',
-    'Final Executive Round': 'Technical Round',
+    'Initial Screening': 'Domain Competency',
+    'Domain Competency': 'Case Study & Scenario',
+    'Case Study & Scenario': 'Behavioral & Cultural Fit',
+    'Portfolio & Presentation': 'Final Executive Round',
+    'Sales & Client Simulation': 'Behavioral & Cultural Fit',
+    'Live Technical & Problem Solving': 'Final Executive Round',
+    'Behavioral & Cultural Fit': 'Final Executive Round',
+    'Final Executive Round': 'Domain Competency',
 };
 
 const ScheduleInterviewDialog = ({

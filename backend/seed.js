@@ -174,46 +174,46 @@ const seedData = async () => {
             {
                 name: "TechNova Solutions",
                 description:
-                    "Technology company developing modern software solutions.",
+                    "Enterprise software, cloud infrastructure, and AI engineering.",
                 website: "https://technova.example.com",
-                location: "Kolkata",
-                logo: "",
+                location: "Bengaluru",
+                logo: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
                 userId: createdRecruiters[0]._id
             },
             {
-                name: "DataSphere Analytics",
+                name: "Apex Healthcare & Clinical Systems",
                 description:
-                    "Data analytics and business intelligence company.",
-                website: "https://datasphere.example.com",
-                location: "Bengaluru",
-                logo: "",
+                    "Multi-specialty hospital network, patient care services, and clinical operations.",
+                website: "https://apexhealth.example.com",
+                location: "Mumbai",
+                logo: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=150&auto=format&fit=crop&q=80",
                 userId: createdRecruiters[1]._id
             },
             {
-                name: "CloudBridge Technologies",
+                name: "Meridian Financial Capital",
                 description:
-                    "Cloud and enterprise software solutions provider.",
-                website: "https://cloudbridge.example.com",
-                location: "Hyderabad",
-                logo: "",
+                    "Investment banking, corporate valuation, wealth management, and risk consultancy.",
+                website: "https://meridiancap.example.com",
+                location: "Delhi NCR",
+                logo: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=150&auto=format&fit=crop&q=80",
                 userId: createdRecruiters[2]._id
             },
             {
-                name: "InnovateLabs",
+                name: "OmniGrowth Media & Marketing",
                 description:
-                    "Product engineering and digital innovation company.",
-                website: "https://innovatelabs.example.com",
-                location: "Pune",
-                logo: "",
+                    "Omnichannel digital advertising, brand marketing, SEO, and content strategy.",
+                website: "https://omnigrowth.example.com",
+                location: "Bengaluru",
+                logo: "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=150&auto=format&fit=crop&q=80",
                 userId: createdRecruiters[3]._id
             },
             {
-                name: "NextGen Systems",
+                name: "GlobalLink Logistics & Operations",
                 description:
-                    "Software development and IT consulting company.",
-                website: "https://nextgen.example.com",
-                location: "Delhi",
-                logo: "",
+                    "Supply chain distribution, automated warehousing, and freight fulfillment networks.",
+                website: "https://globallink.example.com",
+                location: "Hyderabad",
+                logo: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=150&auto=format&fit=crop&q=80",
                 userId: createdRecruiters[4]._id
             }
         ];
@@ -227,31 +227,31 @@ const seedData = async () => {
         // =========================
 
         const jobTitles = [
-            "MERN Stack Developer",
-            "Frontend Developer",
-            "Backend Developer",
-            "Full Stack Developer",
-            "React Developer",
-            "Node.js Developer",
-            "Java Developer",
-            "Python Developer",
-            "Software Engineer",
-            "Data Analyst",
-            "Data Scientist",
-            "Machine Learning Engineer",
-            "AI Engineer",
-            "DevOps Engineer",
-            "Cloud Engineer",
-            "QA Engineer",
-            "Software Testing Engineer",
-            "UI/UX Designer",
-            "Mobile App Developer",
-            "Android Developer",
-            "Cyber Security Analyst",
-            "Business Analyst",
-            "Database Developer",
-            "System Administrator",
-            "Technical Support Engineer"
+            "Frontend Developer (React & TypeScript)",
+            "Clinical Care Specialist & Nurse Lead",
+            "Senior Financial Analyst",
+            "Growth Marketing Strategist",
+            "Supply Chain Operations Manager",
+            "Backend Systems Engineer (Node.js/Go)",
+            "Corporate Legal Counsel",
+            "Hospitality Operations Director",
+            "Product Designer (UI/UX & Design Systems)",
+            "Commercial Enterprise Account Executive",
+            "Human Resources & Talent Business Partner",
+            "Data & Business Intelligence Analyst",
+            "Civil Project Site Engineer",
+            "E-Commerce Logistics & Fulfillment Lead",
+            "Pharmacy Operations Manager",
+            "Risk & Compliance Auditor",
+            "Customer Success & Client Lead",
+            "DevOps & Cloud Reliability Engineer",
+            "Brand & Creative Campaign Director",
+            "Clinical Research Coordinator",
+            "Full Stack Web Application Engineer",
+            "Investment Banking Analyst",
+            "Content Strategy & Communications Specialist",
+            "Procurement & Vendor SLA Specialist",
+            "Quality Assurance & Clinical Safety Lead"
         ];
 
         const locations = [

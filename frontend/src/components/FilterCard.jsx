@@ -10,12 +10,21 @@ const filterData = [
     {
         filterType: "Location",
         icon: MapPin,
-        array: ["Delhi NCR", "Bangalore", "Hyderabad", "Pune", "Mumbai", "Remote"]
+        array: ["Delhi NCR", "Bangalore", "Hyderabad", "Pune", "Mumbai", "Kolkata", "Remote"]
     },
     {
         filterType: "Role / Industry",
         icon: Briefcase,
-        array: ["Frontend Developer", "Backend Developer", "FullStack Developer", "Data Scientist", "DevOps Engineer"]
+        array: [
+            "Software & Tech",
+            "Healthcare & Medical",
+            "Finance & Banking",
+            "Marketing & Sales",
+            "Operations & Logistics",
+            "Design & Creative",
+            "Human Resources",
+            "Education & Training"
+        ]
     },
     {
         filterType: "Salary Range",

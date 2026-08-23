@@ -1,13 +1,13 @@
 import React from 'react';
 import {
     Code2,
-    Server,
-    Layers,
-    BrainCircuit,
+    HeartPulse,
+    TrendingUp,
+    Megaphone,
     Palette,
-    Smartphone,
-    Database,
-    Shield,
+    Truck,
+    Scale,
+    GraduationCap,
     Sparkles,
     ArrowRight
 } from 'lucide-react';
@@ -17,52 +17,68 @@ import { setSearchedQuery } from '@/redux/jobSlice';
 
 const categories = [
     {
-        name: 'Frontend Engineering',
-        query: 'Frontend',
+        name: 'Technology & Software',
+        query: 'Software',
         icon: Code2,
         color: 'from-blue-500/10 to-indigo-500/10 text-blue-600 border-blue-200/80',
         badgeColor: 'bg-blue-50 text-blue-700',
-        count: '140+ Open Roles',
+        count: '240+ Open Roles',
     },
     {
-        name: 'Backend & Cloud',
-        query: 'Backend',
-        icon: Server,
+        name: 'Healthcare & Medical',
+        query: 'Healthcare',
+        icon: HeartPulse,
+        color: 'from-rose-500/10 to-red-500/10 text-rose-600 border-rose-200/80',
+        badgeColor: 'bg-rose-50 text-rose-700',
+        count: '110+ Open Roles',
+    },
+    {
+        name: 'Finance & Banking',
+        query: 'Finance',
+        icon: TrendingUp,
         color: 'from-emerald-500/10 to-teal-500/10 text-emerald-600 border-emerald-200/80',
         badgeColor: 'bg-emerald-50 text-emerald-700',
-        count: '190+ Open Roles',
+        count: '185+ Open Roles',
     },
     {
-        name: 'Full Stack Development',
-        query: 'FullStack',
-        icon: Layers,
-        color: 'from-purple-500/10 to-pink-500/10 text-purple-600 border-purple-200/80',
-        badgeColor: 'bg-purple-50 text-purple-700',
-        count: '210+ Open Roles',
-    },
-    {
-        name: 'AI & Data Science',
-        query: 'AI',
-        icon: BrainCircuit,
+        name: 'Marketing & Sales',
+        query: 'Marketing',
+        icon: Megaphone,
         color: 'from-amber-500/10 to-orange-500/10 text-amber-600 border-amber-200/80',
         badgeColor: 'bg-amber-50 text-amber-700',
+        count: '160+ Open Roles',
+    },
+    {
+        name: 'Design & Creative Media',
+        query: 'Design',
+        icon: Palette,
+        color: 'from-purple-500/10 to-pink-500/10 text-purple-600 border-purple-200/80',
+        badgeColor: 'bg-purple-50 text-purple-700',
         count: '95+ Open Roles',
     },
     {
-        name: 'UI/UX & Product Design',
-        query: 'Designer',
-        icon: Palette,
-        color: 'from-rose-500/10 to-pink-500/10 text-rose-600 border-rose-200/80',
-        badgeColor: 'bg-rose-50 text-rose-700',
-        count: '65+ Open Roles',
-    },
-    {
-        name: 'Mobile App (iOS/Android)',
-        query: 'Mobile',
-        icon: Smartphone,
+        name: 'Operations & Logistics',
+        query: 'Operations',
+        icon: Truck,
         color: 'from-cyan-500/10 to-blue-500/10 text-cyan-600 border-cyan-200/80',
         badgeColor: 'bg-cyan-50 text-cyan-700',
-        count: '80+ Open Roles',
+        count: '120+ Open Roles',
+    },
+    {
+        name: 'HR & Legal Compliance',
+        query: 'Human Resources',
+        icon: Scale,
+        color: 'from-violet-500/10 to-indigo-500/10 text-violet-600 border-violet-200/80',
+        badgeColor: 'bg-violet-50 text-violet-700',
+        count: '75+ Open Roles',
+    },
+    {
+        name: 'Education & Training',
+        query: 'Education',
+        icon: GraduationCap,
+        color: 'from-teal-500/10 to-emerald-500/10 text-teal-600 border-teal-200/80',
+        badgeColor: 'bg-teal-50 text-teal-700',
+        count: '85+ Open Roles',
     },
 ];
 
@@ -81,10 +97,10 @@ const CategoryCarousel = () => {
                 <div>
                     <div className="flex items-center gap-2 text-xs font-bold text-[#6A38C2] uppercase tracking-wider mb-1">
                         <Sparkles className="w-3.5 h-3.5" />
-                        Explore High-Growth Domains
+                        Explore High-Growth Industries
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                        Featured Tech Categories
+                        Featured Career Domains
                     </h2>
                 </div>
                 <button
@@ -99,7 +115,7 @@ const CategoryCarousel = () => {
                 </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3 sm:gap-4">
                 {categories.map((cat, index) => {
                     const IconComponent = cat.icon;
                     return (

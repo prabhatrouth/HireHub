@@ -300,20 +300,20 @@ ${JSON.stringify(applicantsData)}`;
 // 3. AI Cover Letter Generator for Candidates
 export const generateCoverLetterWithAI = async ({ profile, job, customNote }) => {
     const candidateName = profile.fullname || "Applicant";
-    const candidateSkills = (profile.skills || []).join(", ") || "Software Development, Problem Solving";
+    const candidateSkills = (profile.skills || []).join(", ") || "Professional Experience, Problem Solving, Communication";
     const candidateBio = cleanText(profile.bio, 1000);
     const jobTitle = job.title || "Target Position";
     const companyName = (typeof job.company === "object" ? job.company?.name : job.company) || "Hiring Team";
-    const requirements = (job.requirements || []).join(", ") || "Technical and collaborative excellence";
+    const requirements = (job.requirements || []).join(", ") || "Professional excellence and role execution";
 
     const buildFallbackCoverLetter = () => {
         return `Dear Hiring Manager at ${companyName},
 
-I am writing to express my strong interest in the ${jobTitle} position currently open at ${companyName}. With a dedicated background in ${candidateSkills} and a passion for building scalable, high-impact solutions, I am eager to contribute effectively to your engineering and product objectives.
+I am writing to express my enthusiastic interest in the ${jobTitle} position currently open at ${companyName}. With a dedicated background in ${candidateSkills} and a strong track record of driving impactful results, I am eager to contribute effectively to your organization's goals and vision.
 
-Throughout my technical journey, I have developed a strong foundation in core competencies including ${candidateSkills}. ${candidateBio ? `As outlined in my background: "${candidateBio}". ` : ""}I have consistently focused on delivering clean, maintainable code, collaborating with cross-functional teams, and solving challenging engineering problems.
+Throughout my career, I have developed a strong foundation in core competencies including ${candidateSkills}. ${candidateBio ? `As outlined in my background: "${candidateBio}". ` : ""}I have consistently focused on delivering high-quality outcomes, collaborating with cross-functional teams, and solving challenging domain problems with dedication and precision.
 
-The opportunity to join ${companyName} and contribute to your team's innovative work particularly excites me. My experience aligns closely with your requirements in ${requirements}, and I am confident that my problem-solving abilities, enthusiasm, and adaptability make me a strong candidate for this role.
+The opportunity to join ${companyName} and contribute to your team's mission particularly excites me. My experience aligns closely with your requirements in ${requirements}, and I am confident that my problem-solving abilities, domain expertise, and adaptability make me a strong candidate for this role.
 
 Thank you for your time and consideration. I welcome the opportunity to discuss how my skill set and enthusiasm can support ${companyName}'s continued growth.
 
@@ -326,7 +326,7 @@ ${candidateName}`;
 
     try {
         const prompt = `You are an expert AI Career Coach and Professional Resume/Cover Letter Writer for HireHub.
-Write a personalized, compelling, modern, and professional cover letter for the candidate applying for this specific job.
+Write a personalized, compelling, modern, and professional cover letter for the candidate applying for this specific job across ANY industry (Healthcare, Finance, Technology, Marketing, Sales, Operations, HR, Legal, Education, Design, etc.).
 
 CANDIDATE INFO:
 - Name: ${candidateName}
@@ -364,56 +364,56 @@ GUIDELINES:
 
 // 4. AI Smart Interview Preparation Assistant
 export const generateInterviewPrepWithAI = async ({ job, profile }) => {
-    const jobTitle = job.title || "Software Engineer";
+    const jobTitle = job.title || "Professional Role";
     const companyName = (typeof job.company === "object" ? job.company?.name : job.company) || "Hiring Company";
-    const requirements = (job.requirements || []).join(", ") || "Technical and collaborative competencies";
-    const candidateSkills = (profile?.skills || []).join(", ") || "Software Development";
+    const requirements = (job.requirements || []).join(", ") || "Domain competencies and execution";
+    const candidateSkills = (profile?.skills || []).join(", ") || "Professional Competencies";
 
     const buildFallbackPrep = () => {
         return {
             roleSummary: `Strategic interview prep for ${jobTitle} at ${companyName}, focusing on ${requirements}.`,
             technicalQuestions: [
                 {
-                    question: `How have you applied ${requirements.split(",")[0] || "core technologies"} in production or complex project environments?`,
-                    context: "Evaluates practical architectural and problem-solving depth.",
-                    sampleKeyPoints: ["Discuss real project examples", "Highlight trade-offs and performance optimizations", "Mention test coverage and maintainability"],
+                    question: `How have you applied ${requirements.split(",")[0] || "core competencies"} in high-stakes or complex project environments?`,
+                    context: "Evaluates practical domain depth, methodology, and execution rigor.",
+                    sampleKeyPoints: ["Discuss real-world scenarios", "Highlight strategic trade-offs and decision criteria", "Mention measurable outcomes and compliance/standards"],
                 },
                 {
-                    question: `Explain how you handle scalability, state management, and edge-case error boundaries in modern applications.`,
-                    context: "Tests systems design and robustness mindset.",
-                    sampleKeyPoints: ["Separation of concerns", "Resilient fallback states", "Logging and monitoring practices"],
+                    question: `Explain how you handle operational bottlenecks, quality assurance, and edge-case exceptions in this role.`,
+                    context: "Tests analytical problem solving and risk mitigation mindset.",
+                    sampleKeyPoints: ["Structured diagnostics", "Cross-departmental alignment", "Preventative systems and SOPs"],
                 },
                 {
-                    question: `Walk us through your debugging methodology when diagnosing a high-severity production issue.`,
-                    context: "Assesses analytical composure and root-cause analysis.",
-                    sampleKeyPoints: ["Isolating variables", "Checking logs/metrics", "Writing regression tests post-fix"],
+                    question: `Walk us through a time when you diagnosed and resolved a critical issue under tight deadlines.`,
+                    context: "Assesses analytical composure and root-cause resolution.",
+                    sampleKeyPoints: ["Isolating root causes", "Consulting benchmarks/data", "Documenting safeguards post-incident"],
                 },
             ],
             behavioralQuestions: [
                 {
-                    question: `Describe a challenging technical disagreement you had with a teammate and how you resolved it.`,
+                    question: `Describe a challenging disagreement you had with a stakeholder or teammate and how you resolved it.`,
                     framework: "STAR Method (Situation, Task, Action, Result)",
-                    sampleKeyPoints: ["Focus on empathy and shared objectives", "Use objective data or benchmarks", "Show respect for differing viewpoints"],
+                    sampleKeyPoints: ["Focus on empathy and shared objectives", "Use objective facts or data", "Show respect for differing perspectives"],
                 },
                 {
-                    question: `Tell us about a time you had to learn a new framework or technology under tight deadlines.`,
+                    question: `Tell us about a time you had to master a new tool, regulation, or methodology under compressed timelines.`,
                     framework: "STAR Method",
-                    sampleKeyPoints: ["Structured learning approach", "Building an MVP prototype", "Sharing knowledge with team"],
+                    sampleKeyPoints: ["Structured learning approach", "Hands-on application", "Sharing best practices with colleagues"],
                 },
             ],
             situationalQuestions: [
                 {
-                    scenario: `If requirements change mid-sprint right before a release for ${companyName}, how do you prioritize?`,
-                    recommendation: "Communicate proactively with product owners, evaluate critical path impact, and negotiate phased delivery.",
+                    scenario: `If project priorities shift unexpectedly mid-cycle at ${companyName}, how do you adapt your workflow?`,
+                    recommendation: "Communicate proactively with leadership, assess impact against critical deliverables, and establish a clear phased plan.",
                 },
                 {
-                    scenario: `How do you ensure code quality when working under compressed timeline constraints?`,
-                    recommendation: "Focus on automated testing, peer reviews for core logic, and documenting technical debt for future refinement.",
+                    scenario: `How do you maintain high quality and precision when managing multiple urgent deadlines?`,
+                    recommendation: "Prioritize high-impact tasks, leverage standardized checklists/templates, and maintain open communication with the team.",
                 },
             ],
             salaryInsights: {
                 marketBenchmark: job.salary ? `${job.salary} LPA (Company Range)` : "Competitive industry standard based on experience",
-                negotiationTip: `Highlight your specific proficiency in ${requirements.split(",").slice(0, 2).join(" & ")} and your track record of reliable delivery to maximize compensation discussion.`,
+                negotiationTip: `Highlight your specific track record in ${requirements.split(",").slice(0, 2).join(" & ")} and quantifiable business impact to maximize compensation discussions.`,
             },
         };
     };
@@ -422,8 +422,8 @@ export const generateInterviewPrepWithAI = async ({ job, profile }) => {
     if (!ai) return buildFallbackPrep();
 
     try {
-        const prompt = `You are an expert AI Technical Interview Coach for HireHub.
-Generate a structured, high-value interview preparation guide tailored specifically to this job opening.
+        const prompt = `You are an expert AI Career and Interview Coach for HireHub.
+Generate a structured, high-value interview preparation guide tailored specifically to this job opening across ANY industry (Healthcare, Finance, Software, Marketing, Sales, Operations, HR, Legal, Education, Design, etc.).
 
 JOB DETAILS:
 - Title: ${jobTitle}
@@ -437,7 +437,7 @@ Output strict JSON in the following format:
   "roleSummary": "1-2 sentence executive briefing on key focus areas for this interview",
   "technicalQuestions": [
     {
-      "question": "string",
+      "question": "string (tailor to specific domain knowledge, technical depth, or clinical/financial/operational/creative mastery)",
       "context": "string",
       "sampleKeyPoints": ["point 1", "point 2", "point 3"]
     }
@@ -460,7 +460,7 @@ Output strict JSON in the following format:
     "negotiationTip": "string"
   }
 }
-Provide exactly 3 technical questions, 2 behavioral questions, and 2 situational questions.`;
+Provide exactly 3 domain/technical questions, 2 behavioral questions, and 2 situational questions.`;
 
         const response = await ai.models.generateContent({
             model: process.env.GEMINI_MODEL || "gemini-3.7-flash",
@@ -557,19 +557,20 @@ Output strict JSON:
 };
 
 // 6. Recruiter AI Job Description & Requirements Generator
-export const generateJobDescriptionWithAI = async ({ title, companyName, location, jobType, experience, skills }) => {
-    const rawSkills = Array.isArray(skills) ? skills.join(", ") : skills || "Core technical skills";
+export const generateJobDescriptionWithAI = async ({ title, industry, companyName, location, jobType, experience, skills }) => {
+    const rawSkills = Array.isArray(skills) ? skills.join(", ") : skills || "Core domain and operational competencies";
+    const jobIndustry = industry || "General Professional Domain";
 
     const buildFallbackJobDesc = () => {
         return {
-            title: title || "Software Engineer",
-            description: `We are looking for a skilled ${title} to join our growing team at ${companyName || "our company"}. In this role, you will design, develop, and deploy high-quality software solutions, collaborate closely with product managers and cross-functional teams, and contribute to continuous improvement in code quality and performance.\n\nKey Responsibilities:\n- Build robust, scalable, and secure features using modern technology stacks.\n- Collaborate with designers, product managers, and backend engineers to craft seamless user experiences.\n- Write clean, testable, and well-documented code adhering to industry best practices.\n- Participate in code reviews and active technical mentorship.\n- Troubleshoot, debug, and optimize application performance.`,
+            title: title || "Professional Specialist",
+            description: `We are looking for a dedicated and results-driven ${title} to join our team at ${companyName || "our organization"}. In this role, you will lead key domain initiatives, collaborate closely with cross-functional teams, and maintain the highest standards of execution and performance.\n\nKey Responsibilities:\n- Drive day-to-day operations and strategic deliverables within the ${jobIndustry} domain.\n- Collaborate with team leads, stakeholders, and clients to streamline workflows and achieve key milestones.\n- Uphold industry best practices, compliance standards, and quality benchmarks.\n- Monitor outcomes, diagnose challenges, and implement structured solutions.\n- Participate in continuous process improvements and knowledge sharing.`,
             requirements: [
-                `${experience ? `${experience} years of` : "Proven"} experience in software development.`,
-                `Strong proficiency in ${rawSkills}.`,
-                "Familiarity with RESTful APIs, modern databases, and version control (Git).",
+                `${experience ? `${experience} years of` : "Proven"} relevant professional experience in ${jobIndustry}.`,
+                `Strong expertise and hands-on track record with ${rawSkills}.`,
                 "Strong analytical thinking, proactive communication, and problem-solving skills.",
-                "Experience working in collaborative Agile or Scrum environments.",
+                "Demonstrated ability to prioritize tasks, meet deadlines, and deliver measurable results.",
+                "Experience working in collaborative, high-paced team environments.",
             ],
             suggestedSalary: "Competitive (based on experience & market rate)",
             suggestedSkills: rawSkills.split(",").map((s) => s.trim()).filter(Boolean),
@@ -580,23 +581,24 @@ export const generateJobDescriptionWithAI = async ({ title, companyName, locatio
     if (!ai) return buildFallbackJobDesc();
 
     try {
-        const prompt = `You are an expert AI Technical Talent Recruiter and HR Copywriter for HireHub.
-Generate an engaging, professional, and high-converting job posting for the following role:
+        const prompt = `You are an expert AI Talent Recruiter and HR Copywriter for HireHub.
+Generate an engaging, professional, and high-converting job posting for the following role in ANY industry (Healthcare, Finance, Technology, Marketing, Sales, Operations, HR, Legal, Education, Design, etc.):
 
 INPUTS:
 - Title: ${title}
-- Company: ${companyName || "Technology Company"}
-- Location: ${location || "Remote / Hybrid"}
+- Industry / Domain: ${jobIndustry}
+- Company: ${companyName || "Leading Organization"}
+- Location: ${location || "Remote / Hybrid / Onsite"}
 - Job Type: ${jobType || "Full-time"}
 - Experience Level: ${experience || "1-3"} years
-- Key Skills: ${rawSkills}
+- Key Competencies / Skills: ${rawSkills}
 
 Output strict JSON:
 {
   "title": "string",
-  "description": "Full multi-paragraph job description including role overview and bulleted Key Responsibilities formatted with standard newlines",
+  "description": "Full multi-paragraph job description including role overview and bulleted Key Responsibilities formatted with standard newlines tailored specifically to the ${jobIndustry} domain",
   "requirements": ["requirement 1", "requirement 2", "requirement 3", "requirement 4", "requirement 5"],
-  "suggestedSalary": "string (e.g., 10-15 LPA)",
+  "suggestedSalary": "string (e.g., 10-15 LPA or market benchmark)",
   "suggestedSkills": ["Skill 1", "Skill 2", "Skill 3", "Skill 4"]
 }`;
 
@@ -619,22 +621,23 @@ Output strict JSON:
 
 // 7. Student AI Resume Checker & ATS Analyzer
 export const analyzeResumeWithAI = async ({ resumeText, targetRole, profile }) => {
-    const role = targetRole || "Software Engineer / Tech Professional";
-    const studentSkills = (profile?.skills || []).join(", ") || "General Technical Skills";
+    const role = targetRole || "Professional Candidate / Domain Specialist";
+    const studentSkills = (profile?.skills || []).join(", ") || "General Professional Skills";
     const studentBio = cleanText(profile?.bio, 500);
     const content = cleanText(resumeText, MAX_RESUME_CHARACTERS);
 
     const buildFallbackAnalysis = () => {
         const textLower = (content + " " + studentSkills + " " + studentBio).toLowerCase();
         
-        // Common industry tech terms
-        const techSkillsPool = [
-            "JavaScript", "TypeScript", "React", "Node.js", "Python", "Java", "SQL", "MongoDB",
-            "PostgreSQL", "HTML", "CSS", "Tailwind CSS", "Git", "Docker", "AWS", "REST APIs",
-            "Express", "Redux", "Next.js", "GraphQL", "CI/CD", "Testing", "Agile", "Linux"
+        // Broad cross-industry keyword pool
+        const domainSkillsPool = [
+            "Project Management", "Budgeting", "Financial Modeling", "Patient Care", "Risk Analysis",
+            "Marketing Strategy", "Data Analysis", "Communication", "Team Leadership", "Operations",
+            "Supply Chain", "Customer Success", "Compliance", "JavaScript", "Python", "SQL", "React",
+            "Excel", "Negotiation", "Quality Assurance", "Recruitment", "SEO", "Sales Pipeline", "Strategic Planning"
         ];
 
-        const detected = techSkillsPool.filter(skill => textLower.includes(skill.toLowerCase()));
+        const detected = domainSkillsPool.filter(skill => textLower.includes(skill.toLowerCase()));
         if (profile?.skills?.length) {
             profile.skills.forEach(s => {
                 if (!detected.some(d => d.toLowerCase() === s.toLowerCase())) {
@@ -643,11 +646,11 @@ export const analyzeResumeWithAI = async ({ resumeText, targetRole, profile }) =
             });
         }
 
-        const missing = techSkillsPool
+        const missing = domainSkillsPool
             .filter(skill => !detected.some(d => d.toLowerCase() === skill.toLowerCase()))
             .slice(0, 5);
 
-        const hasMetrics = /\d+%|\$\d+|\d+\+|\d+ (users|requests|ms|seconds|clients|downloads|projects)/i.test(content);
+        const hasMetrics = /\d+%|\$\d+|\d+\+|\d+ (users|clients|patients|accounts|deals|leads|requests|seconds|downloads|projects)/i.test(content);
         const hasGoodLength = content.length > 300;
         const skillScore = Math.min(95, Math.max(50, detected.length * 9));
         const impactScore = hasMetrics ? 85 : 62;
@@ -660,19 +663,19 @@ export const analyzeResumeWithAI = async ({ resumeText, targetRole, profile }) =
             atsScore: Math.min(96, Math.max(45, atsScore)),
             targetRole: role,
             grade: atsScore >= 85 ? "A (Excellent)" : atsScore >= 75 ? "B+ (Strong)" : atsScore >= 60 ? "B (Good)" : "C (Needs Optimization)",
-            summary: `Resume shows solid foundational technical competencies for ${role}. Boosting quantifiable impact metrics and key cloud/framework keywords will maximize ATS pass-through rates.`,
+            summary: `Resume demonstrates solid foundational competencies for ${role}. Boosting quantifiable impact metrics, industry certifications, and key domain keywords will maximize ATS pass-through rates.`,
             breakdown: {
                 keywordsMatch: {
                     score: skillScore,
                     label: "Keyword & Skill Alignment",
-                    details: `Identified ${detected.length} relevant technical skills and domain terms for ${role}.`
+                    details: `Identified ${detected.length} relevant competencies and domain terms for ${role}.`
                 },
                 impactAndActionVerbs: {
                     score: impactScore,
                     label: "Action Verbs & Impact Metrics",
                     details: hasMetrics
-                        ? "Good presence of measurable outcomes and performance indicators."
-                        : "Lacks measurable impact metrics (e.g., % latency reduced, user counts, load times)."
+                        ? "Good presence of measurable outcomes, revenue impact, or operational metrics."
+                        : "Lacks measurable impact metrics (e.g., % efficiency gained, revenue generated, client volume)."
                 },
                 formatting: {
                     score: formattingScore,
@@ -685,38 +688,38 @@ export const analyzeResumeWithAI = async ({ resumeText, targetRole, profile }) =
                     details: `Experience points align reasonably well with standard expectations for ${role}.`
                 }
             },
-            detectedSkills: detected.length > 0 ? detected : ["Problem Solving", "Web Fundamentals", "Git"],
+            detectedSkills: detected.length > 0 ? detected : ["Problem Solving", "Domain Analysis", "Cross-functional Collaboration"],
             missingKeywords: missing,
             strengths: [
-                `Clear technical competencies identified (${detected.slice(0, 4).join(", ") || "Core skills"}).`,
+                `Clear core competencies identified (${detected.slice(0, 4).join(", ") || "Core skills"}).`,
                 "Well-structured sections that can be parsed by modern applicant tracking systems.",
-                "Direct relevance to modern software engineering workflows."
+                `Direct alignment with key responsibilities expected in ${role}.`
             ],
             criticalImprovements: [
                 {
-                    section: "Work Experience & Projects",
+                    section: "Work Experience & Achievements",
                     issue: "Bullet points should follow Google's XYZ formula (Accomplished [X], as measured by [Y], by doing [Z]).",
-                    recommendation: "Quantify your achievements with exact percentages, performance boosts, or user counts."
+                    recommendation: "Quantify your achievements with exact percentages, cost savings, revenue improvements, or volume metrics."
                 },
                 {
-                    section: "Skills Section",
+                    section: "Skills & Certifications",
                     issue: `Missing high-frequency ATS keywords for ${role}: ${missing.slice(0, 3).join(", ")}.`,
-                    recommendation: "Incorporate relevant tools, testing frameworks, or cloud platforms you have familiarity with."
+                    recommendation: "Incorporate relevant industry tools, frameworks, methodologies, or standard certifications."
                 },
                 {
                     section: "Summary Statement",
                     issue: "Add a 2-line target-oriented professional summary at the very top of your resume.",
-                    recommendation: `Explicitly mention "${role}" and your primary tech stack in the top 3 lines.`
+                    recommendation: `Explicitly mention "${role}" and your core area of specialization in the top 3 lines.`
                 }
             ],
             bulletOptimizations: [
                 {
-                    original: "Built frontend features and connected to backend API.",
-                    optimized: `Architected responsive, high-performance UI components using modern frontend frameworks, optimizing render times by 30% across 5+ core user flows.`
+                    original: "Handled daily operations and coordinated with team members to deliver projects.",
+                    optimized: `Streamlined cross-functional workflows and delivered 8+ high-stakes deliverables on schedule, accelerating turnaround times by 28% while ensuring 100% compliance.`
                 },
                 {
-                    original: "Worked on database queries and bug fixes.",
-                    optimized: `Optimized high-volume database queries and REST API endpoints, reducing server response latency by 45% and ensuring 99.9% uptime.`
+                    original: "Assisted clients with inquiries and resolved service issues.",
+                    optimized: `Managed high-priority client accounts and resolved 150+ operational inquiries monthly, maintaining a 98.5% satisfaction rating and reducing escalation rates by 35%.`
                 }
             ]
         };
@@ -726,20 +729,20 @@ export const analyzeResumeWithAI = async ({ resumeText, targetRole, profile }) =
     if (!ai) return buildFallbackAnalysis();
 
     try {
-        const prompt = `You are a Senior Technical Recruiter and ATS (Applicant Tracking System) Algorithm Expert for HireHub.
+        const prompt = `You are a Senior Talent Recruiter and ATS (Applicant Tracking System) Algorithm Expert for HireHub across ALL industries (Healthcare, Finance, Software, Marketing, Sales, Operations, HR, Legal, Education, Design, etc.).
 Perform an in-depth, rigorous ATS Resume Audit for the target role: "${role}".
 
 CANDIDATE RESUME / PROFILE:
 ${content || `Skills: ${studentSkills}\nBio: ${studentBio}\nName: ${profile?.fullname || "Candidate"}`}
 
 CRITICAL INSTRUCTIONS:
-- Calculate an accurate atsScore (0-100) based on realistic industry standards.
+- Calculate an accurate atsScore (0-100) based on realistic industry standards for ${role}.
 - Evaluate grade: "A (Excellent)" (85-100), "B+ (Strong)" (75-84), "B (Good)" (60-74), "C (Needs Optimization)" (<60).
 - Extract detectedSkills present in the text and suggest missingKeywords vital for "${role}".
 - Provide breakdown scores for: keywordsMatch, impactAndActionVerbs, formatting, experienceClarity (each 0-100 with a short details note).
-- Provide 3 distinct strengths.
+- Provide 3 distinct strengths tailored to ${role}.
 - Provide 3 high-priority criticalImprovements with section, issue, and recommendation.
-- Provide 2 bulletOptimizations showing an original bullet and a powerful, metric-driven ATS-optimized version.
+- Provide 2 bulletOptimizations showing an original bullet and a powerful, metric-driven ATS-optimized version tailored to this profession.
 
 Output strict JSON in this exact structure:
 {
