@@ -449,18 +449,23 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                         </>
                                     ) : (
                                         <>
-                                            {/* Recruiter / Inspector / Panelist Join Room Button */}
+                                            {/* Recruiter / Inspector / Panelist / Candidate Join Room Button */}
                                             <Button
                                                 size="sm"
                                                 onClick={() => navigate(`/interview/room/${item.roomId}`)}
-                                                className={`h-9 px-4 rounded-xl text-xs font-bold shadow-sm gap-1.5 ${isRecruiter && !isSubUser && isAssignedToOther
-                                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                                    : 'bg-[#6A38C2] hover:bg-[#582da5] text-white'
-                                                    }`}
+                                                className={`h-9 px-4 rounded-xl text-xs font-bold shadow-sm gap-1.5 ${
+                                                    isRecruiter && !isSubUser && isAssignedToOther
+                                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                                        : isLiveNow
+                                                        ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                                                        : 'bg-[#6A38C2] hover:bg-[#582da5] text-white'
+                                                }`}
                                             >
                                                 <Video className="w-3.5 h-3.5" />
                                                 {isRecruiter && !isSubUser && isAssignedToOther
                                                     ? 'Join / Inspect Live'
+                                                    : !isRecruiter
+                                                    ? 'Attend & Join Interview'
                                                     : 'Enter Meeting Room'}
                                             </Button>
 

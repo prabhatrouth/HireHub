@@ -12,6 +12,7 @@ import {
     completeInterview,
     getSubUsers,
     addSubUser,
+    updateSubUser,
     deleteSubUser,
     generateAIQuestions,
 } from "../controllers/interview.controller.js";
@@ -24,7 +25,7 @@ router.route("/my-interviews").get(isAuthenticated, getMyInterviews);
 
 // Sub-users / Technical Interviewers Panel Management
 router.route("/sub-users").get(isAuthenticated, getSubUsers).post(isAuthenticated, addSubUser);
-router.route("/sub-users/:subUserId").delete(isAuthenticated, deleteSubUser);
+router.route("/sub-users/:subUserId").put(isAuthenticated, updateSubUser).delete(isAuthenticated, deleteSubUser);
 
 // Interview room & lifecycle
 router.route("/room/:roomId").get(isAuthenticated, getInterviewRoom);

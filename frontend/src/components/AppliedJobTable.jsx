@@ -17,7 +17,8 @@ import {
     Calendar,
     ArrowRight,
     TrendingUp,
-    Check
+    Check,
+    Video
 } from 'lucide-react';
 
 const AppliedJobTable = () => {
@@ -317,13 +318,22 @@ const AppliedJobTable = () => {
                                                         <ExternalLink className="w-3 h-3 text-gray-400" />
                                                     </Button>
                                                 </Link>
-                                                <Link to={`/student/portal?tab=prep`}>
+                                                <Link to={`/student/portal?tab=my-interviews`}>
+                                                    <Button
+                                                        size="sm"
+                                                        className="bg-purple-50 hover:bg-purple-100 text-[#6A38C2] border border-purple-200 text-xs font-semibold h-8 shadow-2xs gap-1"
+                                                    >
+                                                        <Video className="w-3 h-3 text-purple-600" />
+                                                        <span>Join Interview</span>
+                                                    </Button>
+                                                </Link>
+                                                <Link to={`/student/portal?tab=interview`}>
                                                     <Button
                                                         size="sm"
                                                         className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-semibold h-8 shadow-2xs gap-1"
                                                     >
                                                         <Sparkles className="w-3 h-3" />
-                                                        <span>Prep Interview</span>
+                                                        <span>AI Prep</span>
                                                     </Button>
                                                 </Link>
                                             </>

@@ -60,9 +60,16 @@ const ScheduleInterviewDialog = ({
     onSuccess,
 }) => {
     const navigate = useNavigate();
-    const applicant = applicantData?.applicant || {};
+    const rawApplicant = applicantData?.applicant;
+    const applicant = typeof rawApplicant === 'object' && rawApplicant !== null
+        ? rawApplicant
+        : {
+              _id: typeof rawApplicant === 'string' ? rawApplicant : applicantData?.candidateId || applicantData?.user?._id || applicantData?._id,
+              fullname: applicantData?.fullname || applicantData?.name || 'Candidate',
+              email: applicantData?.email || '',
+          };
     const profile = applicant.profile || {};
-    const jobId = jobData?._id || applicantData?.job?._id || applicantData?.job;
+    const jobId = jobData?._id || applicantData?.job?._id || (typeof applicantData?.job === 'string' ? applicantData.job : null);
     const applicationId = applicantData?._id;
 
     // Tomorrow as default date in YYYY-MM-DD

@@ -12,6 +12,7 @@ import {
     Mail,
     Phone,
     Trash2,
+    Pencil,
     Sparkles,
     Check,
     Plus,
@@ -64,8 +65,11 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
     const [subUsers, setSubUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [isEditOpen, setIsEditOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [editSubmitting, setEditSubmitting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [showEditPassword, setShowEditPassword] = useState(false);
     const [credentialsModal, setCredentialsModal] = useState(null);
 
     const [form, setForm] = useState({
@@ -75,6 +79,27 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
         role: 'Technical Interviewer',
         department: 'Engineering Core',
         specialty: 'React, TypeScript, System Architecture',
+        phone: '',
+        permissions: {
+            canViewAssignedInterviews: true,
+            canConductInterview: true,
+            canSubmitReport: true,
+            canViewAllInterviews: false,
+            canPostJobs: false,
+            canViewAllApplicants: false,
+            canManageCompanies: false,
+            canFinalizeHiringDecision: false,
+        },
+    });
+
+    const [editForm, setEditForm] = useState({
+        subUserId: '',
+        name: '',
+        email: '',
+        password: '',
+        role: 'Technical Interviewer',
+        department: 'Engineering Core',
+        specialty: '',
         phone: '',
         permissions: {
             canViewAssignedInterviews: true,
@@ -116,6 +141,45 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
                 [permKey]: !prev.permissions[permKey],
             },
         }));
+    };
+
+    const toggleEditPermission = (permKey) => {
+        setEditForm((prev) => ({
+            ...prev,
+            permissions: {
+                ...prev.permissions,
+                [permKey]: !prev.permissions[permKey],
+            },
+        }));
+    };
+
+    const handleOpenEdit = (interviewer) => {
+        const perms = interviewer.permissions || {};
+        const specStr = Array.isArray(interviewer.specialty)
+            ? interviewer.specialty.join(', ')
+            : interviewer.specialty || '';
+
+        setEditForm({
+            subUserId: interviewer._id,
+            name: interviewer.name || '',
+            email: interviewer.email || '',
+            password: '',
+            role: interviewer.role || 'Technical Interviewer',
+            department: interviewer.department || 'Engineering Core',
+            specialty: specStr,
+            phone: interviewer.phone || '',
+            permissions: {
+                canViewAssignedInterviews: perms.canViewAssignedInterviews !== false,
+                canConductInterview: perms.canConductInterview !== false,
+                canSubmitReport: perms.canSubmitReport !== false,
+                canViewAllInterviews: Boolean(perms.canViewAllInterviews),
+                canPostJobs: Boolean(perms.canPostJobs),
+                canViewAllApplicants: Boolean(perms.canViewAllApplicants),
+                canManageCompanies: Boolean(perms.canManageCompanies),
+                canFinalizeHiringDecision: Boolean(perms.canFinalizeHiringDecision),
+            },
+        });
+        setIsEditOpen(true);
     };
 
     const handleAddInterviewer = async (e) => {
@@ -178,6 +242,44 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
             toast.error(error.response?.data?.message || 'Failed to add technical interviewer.');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleEditInterviewer = async (e) => {
+        e.preventDefault();
+        if (!editForm.name || !editForm.email) {
+            toast.error('Name and work email are required.');
+            return;
+        }
+
+        setEditSubmitting(true);
+        try {
+            axios.defaults.withCredentials = true;
+            const payload = {
+                name: editForm.name,
+                email: editForm.email,
+                role: editForm.role,
+                department: editForm.department,
+                specialty: editForm.specialty.split(',').map((s) => s.trim()).filter(Boolean),
+                phone: editForm.phone,
+                permissions: editForm.permissions,
+            };
+            if (editForm.password && editForm.password.trim()) {
+                payload.password = editForm.password.trim();
+            }
+
+            const res = await axios.put(`${INTERVIEW_API_END_POINT}/sub-users/${editForm.subUserId}`, payload);
+
+            if (res.data?.success) {
+                toast.success(res.data.message || `Updated ${editForm.name} successfully!`);
+                setSubUsers(res.data.subUsers || []);
+                setIsEditOpen(false);
+            }
+        } catch (error) {
+            console.error('Edit sub-user error:', error);
+            toast.error(error.response?.data?.message || 'Failed to update sub-user.');
+        } finally {
+            setEditSubmitting(false);
         }
     };
 
@@ -299,13 +401,22 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
                                             </div>
                                         </div>
 
-                                        <button
-                                            onClick={() => handleDeleteInterviewer(interviewer._id, interviewer.name)}
-                                            className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-colors"
-                                            title="Remove interviewer"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => handleOpenEdit(interviewer)}
+                                                className="text-slate-400 hover:text-purple-600 p-1.5 hover:bg-purple-50 rounded-lg transition-colors"
+                                                title="Edit sub-user & permissions"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteInterviewer(interviewer._id, interviewer.name)}
+                                                className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-colors"
+                                                title="Remove interviewer"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Contact & Credentials info */}
@@ -570,6 +681,222 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
                                 className="bg-[#6A38C2] hover:bg-[#582da5] text-white font-bold rounded-xl text-xs h-10 px-5"
                             >
                                 {submitting ? 'Creating Sub-User...' : 'Add to Interview Panel'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Sub-User Dialog */}
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogContent className="max-w-lg rounded-3xl border-slate-200 p-6 max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <div className="w-10 h-10 rounded-2xl bg-purple-100 text-[#6A38C2] flex items-center justify-center font-bold mb-2">
+                            <Pencil className="w-5 h-5" />
+                        </div>
+                        <DialogTitle className="text-xl font-black text-slate-900">
+                            Edit Sub-User & Permissions
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">
+                            Modify this technical panelist's profile, credentials, and granted facilities. They will only have access to what you allow here.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleEditInterviewer} className="space-y-4 py-2">
+                        <div>
+                            <Label className="text-xs font-bold text-slate-700">Full Name *</Label>
+                            <Input
+                                placeholder="e.g. Maya Chen"
+                                value={editForm.name}
+                                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                required
+                                className="mt-1 h-10 rounded-xl border-slate-200 text-sm"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <Label className="text-xs font-bold text-slate-700">Work Email (Login ID) *</Label>
+                                <Input
+                                    type="email"
+                                    placeholder="maya.chen@eng.company.com"
+                                    value={editForm.email}
+                                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                                    required
+                                    className="mt-1 h-10 rounded-xl border-slate-200 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs font-bold text-slate-700">New Password (Leave blank to keep)</Label>
+                                <div className="relative mt-1">
+                                    <Input
+                                        type={showEditPassword ? 'text' : 'password'}
+                                        placeholder="Optional new password"
+                                        value={editForm.password}
+                                        onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                                        className="h-10 rounded-xl border-slate-200 text-sm pr-9"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowEditPassword(!showEditPassword)}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    >
+                                        {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <Label className="text-xs font-bold text-slate-700">Role / Title</Label>
+                                <select
+                                    value={editForm.role}
+                                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                                    className="w-full mt-1 h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                                >
+                                    {PRESET_ROLES.map((r) => (
+                                        <option key={r} value={r}>{r}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <Label className="text-xs font-bold text-slate-700">Department</Label>
+                                <select
+                                    value={editForm.department}
+                                    onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                                    className="w-full mt-1 h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                                >
+                                    {PRESET_DEPARTMENTS.map((d) => (
+                                        <option key={d} value={d}>{d}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label className="text-xs font-bold text-slate-700">Technical Expertise / Specialty</Label>
+                            <Input
+                                placeholder="e.g. Distributed Systems, Kubernetes, Go, Kafka"
+                                value={editForm.specialty}
+                                onChange={(e) => setEditForm({ ...editForm, specialty: e.target.value })}
+                                className="mt-1 h-10 rounded-xl border-slate-200 text-sm"
+                            />
+                            <span className="text-[10px] text-slate-400 mt-0.5 block">Separate areas with commas</span>
+                        </div>
+
+                        {/* Granular Permissions Box */}
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
+                            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                                <Label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                    <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                                    Granted Facilities & Permissions
+                                </Label>
+                                <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                                    Recruiter-Controlled
+                                </span>
+                            </div>
+
+                            <div className="space-y-2 text-xs">
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canViewAssignedInterviews}
+                                        onChange={() => toggleEditPermission('canViewAssignedInterviews')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">Access Assigned Interviews Dashboard</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canConductInterview}
+                                        onChange={() => toggleEditPermission('canConductInterview')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">Conduct Live Video & Code Evaluation</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canSubmitReport}
+                                        onChange={() => toggleEditPermission('canSubmitReport')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">Submit Technical Scorecard to Recruiter</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canViewAllInterviews}
+                                        onChange={() => toggleEditPermission('canViewAllInterviews')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">View All Company Interviews (Unchecked: Only Assigned)</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canViewAllApplicants}
+                                        onChange={() => toggleEditPermission('canViewAllApplicants')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">View Job Applicants Pool</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canPostJobs}
+                                        onChange={() => toggleEditPermission('canPostJobs')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">Allow Posting New Job Listings</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canManageCompanies}
+                                        onChange={() => toggleEditPermission('canManageCompanies')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">Manage Company Profile</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={editForm.permissions.canFinalizeHiringDecision}
+                                        onChange={() => toggleEditPermission('canFinalizeHiringDecision')}
+                                        className="rounded text-[#6A38C2] focus:ring-purple-500 h-4 w-4"
+                                    />
+                                    <span className="text-slate-700 font-medium">Allow Finalizing Hiring Decisions (Unchecked: Recruiter has final say)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="pt-3 gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsEditOpen(false)}
+                                className="rounded-xl text-xs h-10"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={editSubmitting}
+                                className="bg-[#6A38C2] hover:bg-[#582da5] text-white font-bold rounded-xl text-xs h-10 px-5"
+                            >
+                                {editSubmitting ? 'Saving Changes...' : 'Save Sub-User Changes'}
                             </Button>
                         </DialogFooter>
                     </form>

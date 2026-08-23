@@ -500,6 +500,13 @@ export const submitEvaluation = async (req, res) => {
 
         const isMasterRecruiter = currentUser?.role === "recruiter" && !currentUser?.isSubUser;
 
+        if (currentUser?.isSubUser && currentUser?.permissions?.canSubmitReport === false) {
+            return res.status(403).json({
+                message: "Access Denied: You do not have permission to submit interview evaluation scorecards.",
+                success: false,
+            });
+        }
+
         const panelistReportData = {
             isSubmitted: true,
             submittedAt: new Date(),
@@ -642,6 +649,13 @@ export const finalizeRecruiterDecision = async (req, res) => {
             recruiterUser = await User.findById(recruiterId);
         } else {
             recruiterUser = mockStore.users.find((u) => String(u._id) === String(recruiterId)) || {};
+        }
+
+        if (recruiterUser?.isSubUser && !recruiterUser?.permissions?.canFinalizeHiringDecision) {
+            return res.status(403).json({
+                message: "Access Denied: You do not have permission to finalize hiring decisions.",
+                success: false,
+            });
         }
 
         const finalDecisionData = {
@@ -838,59 +852,25 @@ export const getSubUsers = async (req, res) => {
                 return res.status(404).json({ message: "Recruiter not found.", success: false });
             }
 
-            let subUsers = recruiter.subUsers || [];
-            if (subUsers.length === 0) {
-                const initialMembers = [
-                    {
-                        name: "Alex Rivera",
-                        email: "alex.rivera@eng.company.com",
-                        role: "Staff Backend Engineer",
-                        department: "Distributed Systems & Cloud",
-                        specialty: ["Node.js", "Go", "Kubernetes", "System Design"],
-                        phone: "+1-555-0192",
-                        permissions: {
-                            canViewAssignedInterviews: true,
-                            canConductInterview: true,
-                            canSubmitReport: true,
-                            canViewAllInterviews: false,
-                            canPostJobs: false,
-                            canViewAllApplicants: false,
-                            canManageCompanies: false,
-                            canFinalizeHiringDecision: false,
-                        },
-                        createdAt: new Date(),
-                    },
-                    {
-                        name: "Priya Nair",
-                        email: "priya.nair@eng.company.com",
-                        role: "Senior Frontend Architect",
-                        department: "Web Platform & UI Core",
-                        specialty: ["React", "TypeScript", "Performance", "CSS/Web Standards"],
-                        phone: "+1-555-0144",
-                        permissions: {
-                            canViewAssignedInterviews: true,
-                            canConductInterview: true,
-                            canSubmitReport: true,
-                            canViewAllInterviews: false,
-                            canPostJobs: false,
-                            canViewAllApplicants: false,
-                            canManageCompanies: false,
-                            canFinalizeHiringDecision: false,
-                        },
-                        createdAt: new Date(),
-                    },
-                ];
-                recruiter.subUsers = initialMembers;
-                await recruiter.save();
-                subUsers = recruiter.subUsers;
+            if (recruiter.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot manage panel members. Only the primary recruiter has access.",
+                    success: false,
+                });
             }
 
             return res.status(200).json({
                 success: true,
-                subUsers,
+                subUsers: recruiter.subUsers || [],
             });
         } else {
             const recruiter = mockStore.users.find((u) => String(u._id) === String(recruiterId)) || mockStore.users[2];
+            if (recruiter?.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot manage panel members. Only the primary recruiter has access.",
+                    success: false,
+                });
+            }
             return res.status(200).json({
                 success: true,
                 subUsers: recruiter?.subUsers || [],
@@ -945,6 +925,13 @@ export const addSubUser = async (req, res) => {
                 return res.status(404).json({ message: "Recruiter not found.", success: false });
             }
 
+            if (recruiter.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot create new sub-users.",
+                    success: false,
+                });
+            }
+
             // Create or update dedicated User account for this technical interviewer
             let subUserAccount = await User.findOne({ email: email.toLowerCase() });
             if (!subUserAccount) {
@@ -967,11 +954,13 @@ export const addSubUser = async (req, res) => {
                     },
                 });
             } else {
+                subUserAccount.fullname = name;
                 subUserAccount.password = hashedPassword;
                 subUserAccount.isSubUser = true;
                 subUserAccount.parentRecruiter = recruiterId;
                 subUserAccount.subRole = role;
                 subUserAccount.department = department;
+                subUserAccount.specialty = Array.isArray(specialty) ? specialty : [specialty];
                 subUserAccount.permissions = effectivePermissions;
                 await subUserAccount.save();
             }
@@ -1003,6 +992,13 @@ export const addSubUser = async (req, res) => {
         } else {
             // Mock store
             const recruiter = mockStore.users.find((u) => String(u._id) === String(recruiterId)) || mockStore.users[2];
+            if (recruiter?.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot create new sub-users.",
+                    success: false,
+                });
+            }
+
             const newSubId = `subuser_${Date.now()}`;
             const newSubUserId = `${newSubId}_user`;
 
@@ -1070,6 +1066,164 @@ export const addSubUser = async (req, res) => {
     }
 };
 
+export const updateSubUser = async (req, res) => {
+    try {
+        const recruiterId = req.id;
+        const { subUserId } = req.params;
+        const {
+            name,
+            email,
+            password,
+            role,
+            department,
+            specialty,
+            phone,
+            permissions,
+        } = req.body;
+
+        if (isDbConnected()) {
+            const recruiter = await User.findById(recruiterId);
+            if (!recruiter) {
+                return res.status(404).json({ message: "Recruiter not found.", success: false });
+            }
+
+            if (recruiter.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot edit panel members. Only the primary recruiter can edit team members.",
+                    success: false,
+                });
+            }
+
+            const subUser = recruiter.subUsers.id(subUserId) || recruiter.subUsers.find((u) => u._id.toString() === subUserId);
+            if (!subUser) {
+                return res.status(404).json({ message: "Sub-user not found in panel.", success: false });
+            }
+
+            const effectivePermissions = permissions ? {
+                canViewAssignedInterviews: permissions.canViewAssignedInterviews !== false,
+                canConductInterview: permissions.canConductInterview !== false,
+                canSubmitReport: permissions.canSubmitReport !== false,
+                canViewAllInterviews: Boolean(permissions.canViewAllInterviews),
+                canPostJobs: Boolean(permissions.canPostJobs),
+                canViewAllApplicants: Boolean(permissions.canViewAllApplicants),
+                canManageCompanies: Boolean(permissions.canManageCompanies),
+                canFinalizeHiringDecision: Boolean(permissions.canFinalizeHiringDecision),
+            } : subUser.permissions;
+
+            const parsedSpecialty = Array.isArray(specialty)
+                ? specialty
+                : specialty !== undefined ? specialty.split(",").map((s) => s.trim()).filter(Boolean) : subUser.specialty;
+
+            if (name) subUser.name = name;
+            if (email) subUser.email = email.toLowerCase();
+            if (role) subUser.role = role;
+            if (department) subUser.department = department;
+            if (specialty !== undefined) subUser.specialty = parsedSpecialty;
+            if (phone !== undefined) subUser.phone = phone;
+            if (permissions) subUser.permissions = effectivePermissions;
+
+            let hashedPassword = null;
+            if (password && password.trim()) {
+                subUser.password = password;
+                hashedPassword = await bcrypt.hash(password, 10);
+            }
+
+            await recruiter.save();
+
+            // Update standalone User account
+            const targetEmail = (email || subUser.email).toLowerCase();
+            const standaloneUser = await User.findOne({
+                $or: [{ _id: subUser.userId }, { email: targetEmail }],
+            });
+
+            if (standaloneUser) {
+                if (name) standaloneUser.fullname = name;
+                if (email) standaloneUser.email = email.toLowerCase();
+                if (phone !== undefined) standaloneUser.phoneNumber = Number(phone.replace(/\D/g, "")) || standaloneUser.phoneNumber;
+                if (role) standaloneUser.subRole = role;
+                if (department) standaloneUser.department = department;
+                if (specialty !== undefined) standaloneUser.specialty = parsedSpecialty;
+                if (permissions) standaloneUser.permissions = effectivePermissions;
+                if (hashedPassword) standaloneUser.password = hashedPassword;
+                await standaloneUser.save();
+            }
+
+            return res.status(200).json({
+                message: `Sub-user ${subUser.name} updated successfully.`,
+                success: true,
+                subUsers: recruiter.subUsers,
+                updatedSubUser: subUser,
+            });
+        } else {
+            // Mock Store
+            const recruiter = mockStore.users.find((u) => String(u._id) === String(recruiterId)) || mockStore.users[2];
+            if (recruiter?.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot edit panel members.",
+                    success: false,
+                });
+            }
+
+            if (!recruiter.subUsers) recruiter.subUsers = [];
+            const subUser = recruiter.subUsers.find((u) => String(u._id) === String(subUserId));
+            if (!subUser) {
+                return res.status(404).json({ message: "Sub-user not found in panel.", success: false });
+            }
+
+            const effectivePermissions = permissions ? {
+                canViewAssignedInterviews: permissions.canViewAssignedInterviews !== false,
+                canConductInterview: permissions.canConductInterview !== false,
+                canSubmitReport: permissions.canSubmitReport !== false,
+                canViewAllInterviews: Boolean(permissions.canViewAllInterviews),
+                canPostJobs: Boolean(permissions.canPostJobs),
+                canViewAllApplicants: Boolean(permissions.canViewAllApplicants),
+                canManageCompanies: Boolean(permissions.canManageCompanies),
+                canFinalizeHiringDecision: Boolean(permissions.canFinalizeHiringDecision),
+            } : subUser.permissions;
+
+            const parsedSpecialty = Array.isArray(specialty)
+                ? specialty
+                : specialty !== undefined ? specialty.split(",").map((s) => s.trim()).filter(Boolean) : subUser.specialty;
+
+            if (name) subUser.name = name;
+            if (email) subUser.email = email.toLowerCase();
+            if (role) subUser.role = role;
+            if (department) subUser.department = department;
+            if (specialty !== undefined) subUser.specialty = parsedSpecialty;
+            if (phone !== undefined) subUser.phone = phone;
+            if (permissions) subUser.permissions = effectivePermissions;
+            if (password) subUser.password = password;
+
+            // Update standalone mock user account
+            const mockStandalone = mockStore.users.find((u) => String(u._id) === String(subUser.userId) || u.email?.toLowerCase() === subUser.email?.toLowerCase());
+            if (mockStandalone) {
+                if (name) mockStandalone.fullname = name;
+                if (email) mockStandalone.email = email.toLowerCase();
+                if (role) mockStandalone.subRole = role;
+                if (department) mockStandalone.department = department;
+                if (specialty !== undefined) mockStandalone.specialty = parsedSpecialty;
+                if (permissions) mockStandalone.permissions = effectivePermissions;
+                if (password) {
+                    mockStandalone.password = await bcrypt.hash(password, 10);
+                }
+            }
+
+            return res.status(200).json({
+                message: `Sub-user ${subUser.name} updated successfully.`,
+                success: true,
+                subUsers: recruiter.subUsers,
+                updatedSubUser: subUser,
+            });
+        }
+    } catch (error) {
+        console.error("Update SubUser Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to update team member.",
+            success: false,
+        });
+    }
+};
+
 export const deleteSubUser = async (req, res) => {
     try {
         const recruiterId = req.id;
@@ -1081,10 +1235,23 @@ export const deleteSubUser = async (req, res) => {
                 return res.status(404).json({ message: "Recruiter not found.", success: false });
             }
 
+            if (recruiter.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot remove panel members.",
+                    success: false,
+                });
+            }
+
+            const targetSubUser = recruiter.subUsers.find((u) => u._id.toString() === subUserId);
             recruiter.subUsers = recruiter.subUsers.filter(
                 (u) => u._id.toString() !== subUserId
             );
             await recruiter.save();
+
+            // Optionally clean up standalone user account
+            if (targetSubUser && targetSubUser.userId) {
+                await User.findByIdAndDelete(targetSubUser.userId);
+            }
 
             return res.status(200).json({
                 message: "Team member removed.",
@@ -1093,8 +1260,18 @@ export const deleteSubUser = async (req, res) => {
             });
         } else {
             const recruiter = mockStore.users.find((u) => String(u._id) === String(recruiterId)) || mockStore.users[2];
+            if (recruiter?.isSubUser) {
+                return res.status(403).json({
+                    message: "Access Denied: Sub-users cannot remove panel members.",
+                    success: false,
+                });
+            }
             if (recruiter && recruiter.subUsers) {
+                const target = recruiter.subUsers.find((u) => String(u._id) === String(subUserId));
                 recruiter.subUsers = recruiter.subUsers.filter((u) => String(u._id) !== String(subUserId));
+                if (target?.userId) {
+                    mockStore.users = mockStore.users.filter((u) => String(u._id) !== String(target.userId));
+                }
             }
             return res.status(200).json({
                 message: "Team member removed.",

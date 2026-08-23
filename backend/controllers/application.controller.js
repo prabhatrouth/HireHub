@@ -1,5 +1,6 @@
 import { Application } from "../models/application.model.js";
 import { Job } from "../models/job.model.js";
+import { User } from "../models/user.model.js";
 import { mockStore } from "../utils/mockStore.js";
 import mongoose from "mongoose";
 
@@ -139,6 +140,21 @@ export const getAppliedJobs = async (req, res) => {
 export const getApplicants = async (req, res) => {
     try {
         const jobId = req.params.id;
+        const userId = req.id;
+
+        let currentUser = null;
+        if (isDbConnected()) {
+            currentUser = await User.findById(userId);
+        } else {
+            currentUser = mockStore.users.find((u) => String(u._id) === String(userId)) || {};
+        }
+
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canViewAllApplicants) {
+            return res.status(403).json({
+                message: "Access Denied: You do not have permission to view applicants.",
+                success: false,
+            });
+        }
 
         if (isDbConnected()) {
             const job = await Job.findById(jobId).populate({
@@ -194,9 +210,25 @@ export const updateStatus = async (req, res) => {
     try {
         const { status } = req.body;
         const applicationId = req.params.id;
+        const userId = req.id;
+
         if (!status) {
             return res.status(400).json({
                 message: "status is required",
+                success: false,
+            });
+        }
+
+        let currentUser = null;
+        if (isDbConnected()) {
+            currentUser = await User.findById(userId);
+        } else {
+            currentUser = mockStore.users.find((u) => String(u._id) === String(userId)) || {};
+        }
+
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canFinalizeHiringDecision) {
+            return res.status(403).json({
+                message: "Access Denied: You do not have permission to change candidate hiring status.",
                 success: false,
             });
         }
