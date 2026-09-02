@@ -35,6 +35,7 @@ import useGetAllAdminJobs from '@/hooks/useGetAllAdminJobs';
 import useGetAllCompanies from '@/hooks/useGetAllCompanies';
 import ScheduledInterviewsList from '../interview/ScheduledInterviewsList';
 import TechnicalInterviewersManager from './TechnicalInterviewersManager';
+import SubUserDashboard from './SubUserDashboard';
 
 const RecruiterPortal = () => {
     useGetAllAdminJobs();
@@ -65,6 +66,19 @@ const RecruiterPortal = () => {
         const tab = searchParams.get('tab');
         if (tab) setActiveTab(tab);
     }, [searchParams]);
+
+    // If logged in as a sub-user (technical interviewer panelist), render their clean, dedicated dashboard
+    if (user?.isSubUser) {
+        return (
+            <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between">
+                <div>
+                    <Navbar />
+                    <SubUserDashboard />
+                </div>
+                <Footer />
+            </div>
+        );
+    }
 
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);

@@ -88,70 +88,134 @@ const Navbar = () => {
                     {/* Desktop Navigation Links */}
                     <nav className="hidden md:flex items-center gap-1 lg:gap-2">
                         {user && user.role === 'recruiter' ? (
-                            <>
-                                <Link
-                                    to="/admin/portal"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        isActive('/admin/portal') && !location.search.includes('tab=interviews') && !location.search.includes('tab=interviewers')
-                                            ? 'bg-purple-50 text-[#6A38C2]'
-                                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
-                                    Recruiter Hub
-                                </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviews"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        location.search.includes('tab=interviews')
-                                            ? 'bg-rose-50 text-rose-700 font-bold'
-                                            : 'text-slate-600 hover:text-rose-600 hover:bg-rose-50/50'
-                                    }`}
-                                >
-                                    <Video className="w-3.5 h-3.5 text-rose-500" />
-                                    Live Interviews
-                                </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviewers"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        location.search.includes('tab=interviewers')
-                                            ? 'bg-indigo-50 text-indigo-700 font-bold'
-                                            : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
-                                    }`}
-                                >
-                                    <Users className="w-3.5 h-3.5 text-indigo-600" />
-                                    Sub-Users & Panel
-                                </Link>
-                                <Link
-                                    to="/admin/companies"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        isActive('/admin/companies')
-                                            ? 'bg-purple-50 text-[#6A38C2]'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Building2 className="w-3.5 h-3.5" />
-                                    Companies
-                                </Link>
-                                <Link
-                                    to="/admin/jobs"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        isActive('/admin/jobs') && !isActive('/admin/jobs/create')
-                                            ? 'bg-purple-50 text-[#6A38C2]'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Briefcase className="w-3.5 h-3.5" />
-                                    Jobs & Applicants
-                                </Link>
-                                <Link
-                                    to="/admin/jobs/create"
-                                    className="ml-2 text-xs bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-purple-500/20 hover:shadow-md transition-all"
-                                >
-                                    <PlusCircle className="w-3.5 h-3.5" />
-                                    Post Job
-                                </Link>
-                            </>
+                            user.isSubUser ? (
+                                /* Dedicated Sub-User Navigation */
+                                <>
+                                    <Link
+                                        to="/admin/portal"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            isActive('/admin/portal') && !location.search.includes('tab=interviews')
+                                                ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                                : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
+                                        }`}
+                                    >
+                                        <Shield className="w-3.5 h-3.5 text-indigo-600" />
+                                        Panelist Hub
+                                    </Link>
+                                    <Link
+                                        to="/admin/portal?tab=interviews"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            location.search.includes('tab=interviews')
+                                                ? 'bg-rose-50 text-rose-700 font-bold'
+                                                : 'text-slate-600 hover:text-rose-600 hover:bg-rose-50/50'
+                                        }`}
+                                    >
+                                        <Video className="w-3.5 h-3.5 text-rose-500" />
+                                        Assigned Interviews
+                                    </Link>
+                                    {user?.permissions?.canViewAllApplicants && (
+                                        <Link
+                                            to="/admin/jobs"
+                                            className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                                isActive('/admin/jobs') && !isActive('/admin/jobs/create')
+                                                    ? 'bg-purple-50 text-[#6A38C2]'
+                                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Briefcase className="w-3.5 h-3.5" />
+                                            Applicants
+                                        </Link>
+                                    )}
+                                    {user?.permissions?.canManageCompanies && (
+                                        <Link
+                                            to="/admin/companies"
+                                            className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                                isActive('/admin/companies')
+                                                    ? 'bg-purple-50 text-[#6A38C2]'
+                                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Building2 className="w-3.5 h-3.5" />
+                                            Companies
+                                        </Link>
+                                    )}
+                                    {user?.permissions?.canPostJobs && (
+                                        <Link
+                                            to="/admin/jobs/create"
+                                            className="ml-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-indigo-500/20 hover:shadow-md transition-all"
+                                        >
+                                            <PlusCircle className="w-3.5 h-3.5" />
+                                            Post Job
+                                        </Link>
+                                    )}
+                                </>
+                            ) : (
+                                /* Lead Recruiter Navigation */
+                                <>
+                                    <Link
+                                        to="/admin/portal"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            isActive('/admin/portal') && !location.search.includes('tab=interviews') && !location.search.includes('tab=interviewers')
+                                                ? 'bg-purple-50 text-[#6A38C2]'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
+                                        Recruiter Hub
+                                    </Link>
+                                    <Link
+                                        to="/admin/portal?tab=interviews"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            location.search.includes('tab=interviews')
+                                                ? 'bg-rose-50 text-rose-700 font-bold'
+                                                : 'text-slate-600 hover:text-rose-600 hover:bg-rose-50/50'
+                                        }`}
+                                    >
+                                        <Video className="w-3.5 h-3.5 text-rose-500" />
+                                        Live Interviews
+                                    </Link>
+                                    <Link
+                                        to="/admin/portal?tab=interviewers"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            location.search.includes('tab=interviewers')
+                                                ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                                : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
+                                        }`}
+                                    >
+                                        <Users className="w-3.5 h-3.5 text-indigo-600" />
+                                        Sub-Users & Panel
+                                    </Link>
+                                    <Link
+                                        to="/admin/companies"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            isActive('/admin/companies')
+                                                ? 'bg-purple-50 text-[#6A38C2]'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Building2 className="w-3.5 h-3.5" />
+                                        Companies
+                                    </Link>
+                                    <Link
+                                        to="/admin/jobs"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            isActive('/admin/jobs') && !isActive('/admin/jobs/create')
+                                                ? 'bg-purple-50 text-[#6A38C2]'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Briefcase className="w-3.5 h-3.5" />
+                                        Jobs & Applicants
+                                    </Link>
+                                    <Link
+                                        to="/admin/jobs/create"
+                                        className="ml-2 text-xs bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-purple-500/20 hover:shadow-md transition-all"
+                                    >
+                                        <PlusCircle className="w-3.5 h-3.5" />
+                                        Post Job
+                                    </Link>
+                                </>
+                            )
                         ) : (
                             <>
                                 <Link
@@ -261,44 +325,94 @@ const Navbar = () => {
                                             <div className="min-w-0 flex-1">
                                                 <h4 className="font-bold text-sm text-slate-900 truncate">{user?.fullname}</h4>
                                                 <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                                                <span className="inline-block mt-1 text-[10px] px-2 py-0.5 bg-purple-50 text-[#6A38C2] font-bold rounded-full capitalize">
-                                                    {user?.role} Account
-                                                </span>
+                                                {user?.isSubUser ? (
+                                                    <div className="mt-1 flex flex-col gap-0.5">
+                                                        <span className="inline-block text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-full">
+                                                            {user?.subRole || 'Sub-User Panelist'}
+                                                        </span>
+                                                        {user?.department && (
+                                                            <span className="text-[10px] text-slate-500 font-medium truncate">
+                                                                {user.department}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="inline-block mt-1 text-[10px] px-2 py-0.5 bg-purple-50 text-[#6A38C2] font-bold rounded-full capitalize">
+                                                        {user?.role} Account
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 
                                         <div className="mt-3 space-y-1">
                                             {user.role === 'recruiter' ? (
-                                                <>
-                                                    <Link
-                                                        to="/admin/portal"
-                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
-                                                    >
-                                                        <Sparkles className="w-4 h-4 text-purple-600" />
-                                                        <span>Recruiter Command Hub</span>
-                                                    </Link>
-                                                    <Link
-                                                        to="/admin/portal?tab=interviews"
-                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-700 rounded-xl transition-colors"
-                                                    >
-                                                        <Video className="w-4 h-4 text-rose-500" />
-                                                        <span>Live Video Interviews</span>
-                                                    </Link>
-                                                    <Link
-                                                        to="/admin/portal?tab=interviewers"
-                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl transition-colors"
-                                                    >
-                                                        <Users className="w-4 h-4 text-indigo-600" />
-                                                        <span>Manage Sub-Users & Panel</span>
-                                                    </Link>
-                                                    <Link
-                                                        to="/admin/jobs/create"
-                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
-                                                    >
-                                                        <PlusCircle className="w-4 h-4 text-purple-600" />
-                                                        <span>Post New Role</span>
-                                                    </Link>
-                                                </>
+                                                user.isSubUser ? (
+                                                    <>
+                                                        <Link
+                                                            to="/admin/portal"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl transition-colors"
+                                                        >
+                                                            <Shield className="w-4 h-4 text-indigo-600" />
+                                                            <span>Panelist Dashboard</span>
+                                                        </Link>
+                                                        <Link
+                                                            to="/admin/portal?tab=interviews"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-700 rounded-xl transition-colors"
+                                                        >
+                                                            <Video className="w-4 h-4 text-rose-500" />
+                                                            <span>Assigned Interviews</span>
+                                                        </Link>
+                                                        {user?.permissions?.canViewAllApplicants && (
+                                                            <Link
+                                                                to="/admin/jobs"
+                                                                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
+                                                            >
+                                                                <Briefcase className="w-4 h-4 text-[#6A38C2]" />
+                                                                <span>Candidate Applicants</span>
+                                                            </Link>
+                                                        )}
+                                                        {user?.permissions?.canPostJobs && (
+                                                            <Link
+                                                                to="/admin/jobs/create"
+                                                                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl transition-colors"
+                                                            >
+                                                                <PlusCircle className="w-4 h-4 text-indigo-600" />
+                                                                <span>Post Job Position</span>
+                                                            </Link>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Link
+                                                            to="/admin/portal"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
+                                                        >
+                                                            <Sparkles className="w-4 h-4 text-purple-600" />
+                                                            <span>Recruiter Command Hub</span>
+                                                        </Link>
+                                                        <Link
+                                                            to="/admin/portal?tab=interviews"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-700 rounded-xl transition-colors"
+                                                        >
+                                                            <Video className="w-4 h-4 text-rose-500" />
+                                                            <span>Live Video Interviews</span>
+                                                        </Link>
+                                                        <Link
+                                                            to="/admin/portal?tab=interviewers"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl transition-colors"
+                                                        >
+                                                            <Users className="w-4 h-4 text-indigo-600" />
+                                                            <span>Manage Sub-Users & Panel</span>
+                                                        </Link>
+                                                        <Link
+                                                            to="/admin/jobs/create"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
+                                                        >
+                                                            <PlusCircle className="w-4 h-4 text-purple-600" />
+                                                            <span>Post New Role</span>
+                                                        </Link>
+                                                    </>
+                                                )
                                             ) : (
                                                 <>
                                                     <Link
@@ -367,62 +481,119 @@ const Navbar = () => {
                 <div className="md:hidden bg-white/95 backdrop-blur-xl border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 shadow-xl animate-in slide-in-from-top-2 duration-200">
                     <div className="space-y-1">
                         {user && user.role === 'recruiter' ? (
-                            <>
-                                <Link
-                                    to="/admin/portal"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
-                                        isActive('/admin/portal') && !location.search.includes('tab=interviews') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Sparkles className="w-4 h-4 text-[#6A38C2]" />
-                                    <span>Recruiter Command Hub</span>
-                                </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviews"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-rose-50/70"
-                                >
-                                    <Video className="w-4 h-4 text-rose-500" />
-                                    <span>Live Video Interviews</span>
-                                </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviewers"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50/70"
-                                >
-                                    <Users className="w-4 h-4 text-indigo-600" />
-                                    <span>Manage Sub-Users & Panel</span>
-                                </Link>
-                                <Link
-                                    to="/admin/companies"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
-                                        isActive('/admin/companies') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Building2 className="w-4 h-4 text-[#6A38C2]" />
-                                    <span>Manage Companies</span>
-                                </Link>
-                                <Link
-                                    to="/admin/jobs"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
-                                        isActive('/admin/jobs') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Briefcase className="w-4 h-4 text-[#6A38C2]" />
-                                    <span>Jobs & AI Applicants</span>
-                                </Link>
-                                <Link
-                                    to="/admin/jobs/create"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-bold bg-[#6A38C2] text-white shadow-xs"
-                                >
-                                    <PlusCircle className="w-4 h-4" />
-                                    <span>Post a New Job</span>
-                                </Link>
-                            </>
+                            user.isSubUser ? (
+                                <>
+                                    <Link
+                                        to="/admin/portal"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                            isActive('/admin/portal') && !location.search.includes('tab=interviews') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Shield className="w-4 h-4 text-indigo-600" />
+                                        <span>Panelist Dashboard</span>
+                                    </Link>
+                                    <Link
+                                        to="/admin/portal?tab=interviews"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-rose-50/70"
+                                    >
+                                        <Video className="w-4 h-4 text-rose-500" />
+                                        <span>Assigned Interviews</span>
+                                    </Link>
+                                    {user?.permissions?.canViewAllApplicants && (
+                                        <Link
+                                            to="/admin/jobs"
+                                            onClick={() => setMobileMenuOpen(false)}
+                                            className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                                isActive('/admin/jobs') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Briefcase className="w-4 h-4 text-[#6A38C2]" />
+                                            <span>Candidate Applicants</span>
+                                        </Link>
+                                    )}
+                                    {user?.permissions?.canManageCompanies && (
+                                        <Link
+                                            to="/admin/companies"
+                                            onClick={() => setMobileMenuOpen(false)}
+                                            className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                                isActive('/admin/companies') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Building2 className="w-4 h-4 text-[#6A38C2]" />
+                                            <span>Companies</span>
+                                        </Link>
+                                    )}
+                                    {user?.permissions?.canPostJobs && (
+                                        <Link
+                                            to="/admin/jobs/create"
+                                            onClick={() => setMobileMenuOpen(false)}
+                                            className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-xs"
+                                        >
+                                            <PlusCircle className="w-4 h-4" />
+                                            <span>Post Job Position</span>
+                                        </Link>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <Link
+                                        to="/admin/portal"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                            isActive('/admin/portal') && !location.search.includes('tab=interviews') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Sparkles className="w-4 h-4 text-[#6A38C2]" />
+                                        <span>Recruiter Command Hub</span>
+                                    </Link>
+                                    <Link
+                                        to="/admin/portal?tab=interviews"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-rose-50/70"
+                                    >
+                                        <Video className="w-4 h-4 text-rose-500" />
+                                        <span>Live Video Interviews</span>
+                                    </Link>
+                                    <Link
+                                        to="/admin/portal?tab=interviewers"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50/70"
+                                    >
+                                        <Users className="w-4 h-4 text-indigo-600" />
+                                        <span>Manage Sub-Users & Panel</span>
+                                    </Link>
+                                    <Link
+                                        to="/admin/companies"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                            isActive('/admin/companies') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Building2 className="w-4 h-4 text-[#6A38C2]" />
+                                        <span>Manage Companies</span>
+                                    </Link>
+                                    <Link
+                                        to="/admin/jobs"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                            isActive('/admin/jobs') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Briefcase className="w-4 h-4 text-[#6A38C2]" />
+                                        <span>Jobs & AI Applicants</span>
+                                    </Link>
+                                    <Link
+                                        to="/admin/jobs/create"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-bold bg-[#6A38C2] text-white shadow-xs"
+                                    >
+                                        <PlusCircle className="w-4 h-4" />
+                                        <span>Post a New Job</span>
+                                    </Link>
+                                </>
+                            )
                         ) : (
                             <>
                                 <Link
