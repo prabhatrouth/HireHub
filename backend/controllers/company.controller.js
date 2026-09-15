@@ -74,15 +74,25 @@ export const getCompany = async (req, res) => {
     try {
         const userId = req.id; // logged in user id
 
+        let isAdminUser = false;
         if (isDbConnected()) {
-            const companies = await Company.find({ userId });
+            const u = await User.findById(userId);
+            if (u?.role === "admin") isAdminUser = true;
+        } else {
+            const u = mockStore.users.find((u) => String(u._id) === String(userId));
+            if (u?.role === "admin") isAdminUser = true;
+        }
+
+        if (isDbConnected()) {
+            const query = isAdminUser ? {} : { userId };
+            const companies = await Company.find(query);
             return res.status(200).json({
                 companies: companies || [],
                 success: true,
             });
         } else {
             const userCompanies = mockStore.companies.filter(
-                (c) => String(c.userId) === String(userId) || userId === "recruiter_1"
+                (c) => isAdminUser || String(c.userId) === String(userId) || userId === "recruiter_1"
             );
             return res.status(200).json({
                 companies: userCompanies,

@@ -10,9 +10,31 @@ const ProtectedRoute = ({ children, allowedRoles = ['recruiter'] }) => {
     const allowedRolesKey = allowedRoles.join(',');
 
     useEffect(() => {
+        const isAdminRequired = allowedRoles.length === 1 && allowedRoles.includes('admin');
+
         if (!user) {
-            navigate("/login", { state: { from: location.pathname + location.search } });
-        } else if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+            // If trying to access admin dashboard, redirect to secret /admin/login
+            if (isAdminRequired || location.pathname.startsWith('/admin/dashboard')) {
+                navigate("/admin/login", { state: { from: location.pathname + location.search } });
+            } else {
+                navigate("/login", { state: { from: location.pathname + location.search } });
+            }
+            return;
+        }
+
+        // Platform Administrator has universal access to ALL features and facilities
+        if (user.role === 'admin') {
+            return;
+        }
+
+        // Non-admin trying to access admin-only route
+        if (isAdminRequired) {
+            navigate("/admin/login");
+            return;
+        }
+
+        // Standard role validation for student / recruiter
+        if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
             if (user.role === 'student') {
                 navigate("/student/portal");
             } else {
@@ -23,6 +45,11 @@ const ProtectedRoute = ({ children, allowedRoles = ['recruiter'] }) => {
 
     if (!user) {
         return null;
+    }
+
+    // Platform administrator has full bypass to all facilities
+    if (user.role === 'admin') {
+        return <>{children}</>;
     }
 
     if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
@@ -37,3 +64,4 @@ const ProtectedRoute = ({ children, allowedRoles = ['recruiter'] }) => {
 };
 
 export default ProtectedRoute;
+

@@ -87,7 +87,65 @@ const Navbar = () => {
 
                     {/* Desktop Navigation Links */}
                     <nav className="hidden md:flex items-center gap-1 lg:gap-2">
-                        {user && user.role === 'recruiter' ? (
+                        {user && user.role === 'admin' ? (
+                            <>
+                                <Link
+                                    to="/admin/dashboard"
+                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                                        isActive('/admin/dashboard')
+                                            ? 'bg-slate-950 text-purple-400 border border-slate-800'
+                                            : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                                    }`}
+                                >
+                                    <Shield className="w-3.5 h-3.5 text-purple-600" />
+                                    Admin Console
+                                </Link>
+                                <Link
+                                    to="/admin/portal"
+                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                        isActive('/admin/portal')
+                                            ? 'bg-purple-50 text-[#6A38C2]'
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
+                                    Recruiter Hub
+                                </Link>
+                                <Link
+                                    to="/admin/companies"
+                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                        isActive('/admin/companies')
+                                            ? 'bg-purple-50 text-[#6A38C2]'
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Building2 className="w-3.5 h-3.5" />
+                                    Companies
+                                </Link>
+                                <Link
+                                    to="/admin/jobs"
+                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                        isActive('/admin/jobs') && !isActive('/admin/jobs/create')
+                                            ? 'bg-purple-50 text-[#6A38C2]'
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Briefcase className="w-3.5 h-3.5" />
+                                    All Jobs
+                                </Link>
+                                <Link
+                                    to="/student/portal"
+                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                        isActive('/student/portal')
+                                            ? 'bg-purple-50 text-[#6A38C2]'
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Users className="w-3.5 h-3.5" />
+                                    Candidate Hub
+                                </Link>
+                            </>
+                        ) : user && user.role === 'recruiter' ? (
                             <>
                                 <Link
                                     to="/admin/portal"
@@ -268,7 +326,38 @@ const Navbar = () => {
                                         </div>
 
                                         <div className="mt-3 space-y-1">
-                                            {user.role === 'recruiter' ? (
+                                            {user.role === 'admin' ? (
+                                                <>
+                                                    <Link
+                                                        to="/admin/dashboard"
+                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors"
+                                                    >
+                                                        <Shield className="w-4 h-4 text-purple-600" />
+                                                        <span>Admin Command Console</span>
+                                                    </Link>
+                                                    <Link
+                                                        to="/admin/portal"
+                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
+                                                    >
+                                                        <Sparkles className="w-4 h-4 text-purple-600" />
+                                                        <span>Recruiter Hub (All Data)</span>
+                                                    </Link>
+                                                    <Link
+                                                        to="/student/portal"
+                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
+                                                    >
+                                                        <Users className="w-4 h-4 text-purple-600" />
+                                                        <span>Candidate Career Hub</span>
+                                                    </Link>
+                                                    <Link
+                                                        to="/admin/jobs/create"
+                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
+                                                    >
+                                                        <PlusCircle className="w-4 h-4 text-purple-600" />
+                                                        <span>Post Platform Job</span>
+                                                    </Link>
+                                                </>
+                                            ) : user.role === 'recruiter' ? (
                                                 <>
                                                     <Link
                                                         to="/admin/portal"
@@ -366,7 +455,60 @@ const Navbar = () => {
             {mobileMenuOpen && (
                 <div className="md:hidden bg-white/95 backdrop-blur-xl border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 shadow-xl animate-in slide-in-from-top-2 duration-200">
                     <div className="space-y-1">
-                        {user && user.role === 'recruiter' ? (
+                        {user && user.role === 'admin' ? (
+                            <>
+                                <Link
+                                    to="/admin/dashboard"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-bold ${
+                                        isActive('/admin/dashboard') ? 'bg-slate-900 text-purple-400' : 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                                    }`}
+                                >
+                                    <Shield className="w-4 h-4 text-purple-600" />
+                                    <span>Admin Console</span>
+                                </Link>
+                                <Link
+                                    to="/admin/portal"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                        isActive('/admin/portal') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Sparkles className="w-4 h-4 text-[#6A38C2]" />
+                                    <span>Recruiter Command Hub</span>
+                                </Link>
+                                <Link
+                                    to="/admin/companies"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                        isActive('/admin/companies') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Building2 className="w-4 h-4 text-[#6A38C2]" />
+                                    <span>All Companies</span>
+                                </Link>
+                                <Link
+                                    to="/admin/jobs"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                        isActive('/admin/jobs') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Briefcase className="w-4 h-4 text-[#6A38C2]" />
+                                    <span>All Jobs & Applicants</span>
+                                </Link>
+                                <Link
+                                    to="/student/portal"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                        isActive('/student/portal') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Users className="w-4 h-4 text-purple-600" />
+                                    <span>Student Career Hub</span>
+                                </Link>
+                            </>
+                        ) : user && user.role === 'recruiter' ? (
                             <>
                                 <Link
                                     to="/admin/portal"

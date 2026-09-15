@@ -70,6 +70,25 @@ const mockRecruiters = [
     }
 ];
 
+const mockAdmins = [
+    {
+        _id: "admin_super_1",
+        fullname: "HireHub System Administrator",
+        email: "admin@hirehub.internal",
+        phoneNumber: 9999999999,
+        password: demoPasswordHash,
+        role: "admin",
+        profile: {
+            bio: "Website Administrator with unrestricted global privileges, database diagnostics, and management facilities.",
+            skills: ["Database Management", "System Architecture", "Security Auditing"],
+            profilePhoto: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+            resume: "",
+            resumeOriginalName: "",
+        },
+        subUsers: []
+    }
+];
+
 const mockCompanies = [
     {
         _id: "company_1",
@@ -280,7 +299,7 @@ const mockInterviews = [
 ];
 
 export const mockStore = {
-    users: [...mockStudents, ...mockRecruiters],
+    users: [...mockStudents, ...mockRecruiters, ...mockAdmins],
     companies: [...mockCompanies],
     jobs: [...mockJobs],
     applications: [...mockApplications],

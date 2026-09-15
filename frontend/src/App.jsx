@@ -18,6 +18,8 @@ import PostJob from './components/admin/PostJob'
 import Applicants from './components/admin/Applicants'
 import RecruiterPortal from './components/admin/RecruiterPortal'
 import ProtectedRoute from './components/admin/ProtectedRoute'
+import AdminLogin from './components/admin/AdminLogin'
+import AdminDashboard from './components/admin/AdminDashboard'
 import SessionExpiryTracker from './components/shared/SessionExpiryTracker'
 import InterviewAlertBanner from './components/shared/InterviewAlertBanner'
 import LiveInterviewRoom from './components/interview/LiveInterviewRoom'
@@ -77,6 +79,14 @@ const appRouter = createBrowserRouter([
         element: <ProtectedRoute allowedRoles={['student', 'recruiter']}><Profile /></ProtectedRoute>
       },
       // recruiter / admin routes
+      {
+        path: "/admin/login",
+        element: <AdminLogin />
+      },
+      {
+        path: "/admin/dashboard",
+        element: <ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>
+      },
       {
         path: "/admin/portal",
         element: <ProtectedRoute allowedRoles={['recruiter']}><RecruiterPortal /></ProtectedRoute>

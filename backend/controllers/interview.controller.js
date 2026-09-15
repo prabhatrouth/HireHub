@@ -175,7 +175,9 @@ export const getMyInterviews = async (req, res) => {
             }
 
             let query = {};
-            if (user.role === "recruiter") {
+            if (user.role === "admin") {
+                query = {}; // Admin has unrestricted global access to all interviews
+            } else if (user.role === "recruiter") {
                 if (user.isSubUser) {
                     // Technical / delegated sub-user:
                     // If they have full visibility permission, they can view all parent recruiter's interviews
@@ -217,7 +219,9 @@ export const getMyInterviews = async (req, res) => {
             const allInterviews = mockStore.interviews || [];
 
             let filtered = [];
-            if (user.role === "recruiter") {
+            if (user.role === "admin") {
+                filtered = allInterviews;
+            } else if (user.role === "recruiter") {
                 if (user.isSubUser) {
                     if (user.permissions?.canViewAllInterviews) {
                         filtered = allInterviews;

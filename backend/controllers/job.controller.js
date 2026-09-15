@@ -191,8 +191,19 @@ export const getAdminJobs = async (req, res) => {
     try {
         const adminId = req.id;
 
+        // Check if user is platform administrator
+        let isAdminUser = false;
         if (isDbConnected()) {
-            const jobs = await Job.find({ created_by: adminId })
+            const u = await User.findById(adminId);
+            if (u?.role === "admin") isAdminUser = true;
+        } else {
+            const u = mockStore.users.find((u) => String(u._id) === String(adminId));
+            if (u?.role === "admin") isAdminUser = true;
+        }
+
+        if (isDbConnected()) {
+            const query = isAdminUser ? {} : { created_by: adminId };
+            const jobs = await Job.find(query)
                 .populate({ path: "company" })
                 .sort({ createdAt: -1 });
 
@@ -203,7 +214,7 @@ export const getAdminJobs = async (req, res) => {
         } else {
             const adminJobs = mockStore.jobs
                 .filter(
-                    (j) => String(j.created_by) === String(adminId) || adminId === "recruiter_1"
+                    (j) => isAdminUser || String(j.created_by) === String(adminId) || adminId === "recruiter_1"
                 )
                 .map((j) => {
                     let companyObj = j.company;

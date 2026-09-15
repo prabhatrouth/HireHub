@@ -12,6 +12,7 @@ import jobRoute from "./routes/job.route.js";
 import applicationRoute from "./routes/application.route.js";
 import aiRoute from "./routes/ai.route.js";
 import interviewRoute from "./routes/interview.route.js";
+import adminRoute from "./routes/admin.route.js";
 
 dotenv.config({});
 
@@ -56,6 +57,7 @@ app.use("/api/v1/job", jobRoute);
 app.use("/api/v1/application", applicationRoute);
 app.use("/api/v1/ai", aiRoute);
 app.use("/api/v1/interview", interviewRoute);
+app.use("/api/v1/admin", adminRoute);
 
 // Global Error Handler for API routes
 app.use((err, req, res, next) => {
