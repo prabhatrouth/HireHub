@@ -26,7 +26,7 @@ const AppliedJobTable = () => {
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [searchTerm, setSearchTerm] = useState('');
 
-    const jobs = useMemo(() => allAppliedJobs || [], [allAppliedJobs]);
+    const jobs = allAppliedJobs || [];
 
     // Calculate quick stats
     const stats = useMemo(() => {
