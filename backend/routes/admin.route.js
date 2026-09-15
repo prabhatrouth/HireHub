@@ -5,6 +5,7 @@ import {
     getAllPlatformUsers,
     createPlatformUser,
     updateUserRole,
+    updatePlatformUserDetails,
     deletePlatformUser,
     getAllPlatformJobs,
     deletePlatformJob,
@@ -29,6 +30,7 @@ router.get("/stats", isAuthenticated, isAdmin, getAdminStats);
 // User Management
 router.get("/users", isAuthenticated, isAdmin, getAllPlatformUsers);
 router.post("/users", isAuthenticated, isAdmin, createPlatformUser);
+router.put("/users/:id", isAuthenticated, isAdmin, updatePlatformUserDetails);
 router.put("/users/:id/role", isAuthenticated, isAdmin, updateUserRole);
 router.delete("/users/:id", isAuthenticated, isAdmin, deletePlatformUser);
 
