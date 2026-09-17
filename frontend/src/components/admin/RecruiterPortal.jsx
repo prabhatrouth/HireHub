@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Navbar from '../shared/Navbar';
 import Footer from '../shared/Footer';
 import { useSelector } from 'react-redux';
@@ -66,13 +66,13 @@ const RecruiterPortal = () => {
     const userCanManageSubUsers = canManageSubUsers(user);
     const canSeeOverview = userCanPostJobs || userCanViewApplicants;
 
-    const availableTabs = [
+    const availableTabs = useMemo(() => [
         ...(canSeeOverview ? [{ id: 'overview', label: `Overview & Jobs (${allAdminJobs?.length || 0})`, icon: BarChart3 }] : []),
         ...(userCanAccessInterviews ? [{ id: 'interviews', label: 'Live Video Interviews & Scorecards', icon: Video, color: 'text-rose-400' }] : []),
         ...(userCanManageSubUsers ? [{ id: 'interviewers', label: 'Technical Interviewers Panel', icon: Users, color: 'text-indigo-400' }] : []),
         ...(userCanPostJobs ? [{ id: 'ai-generator', label: 'AI Job Description Studio', icon: Sparkles, color: 'text-[#6A38C2]' }] : []),
         ...(userCanManageCompanies ? [{ id: 'companies', label: `Companies (${companies?.length || 0})`, icon: Building2, color: 'text-[#6A38C2]' }] : []),
-    ];
+    ], [canSeeOverview, allAdminJobs?.length, userCanAccessInterviews, userCanManageSubUsers, userCanPostJobs, userCanManageCompanies, companies?.length]);
 
     const defaultTab = availableTabs[0]?.id || 'overview';
     const requestedTab = searchParams.get('tab');

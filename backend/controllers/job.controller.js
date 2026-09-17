@@ -230,19 +230,38 @@ export const getAdminJobs = async (req, res) => {
             });
         }
 
-        const effectiveRecruiterId = currentUser?.isSubUser && currentUser?.parentRecruiter
-            ? currentUser.parentRecruiter
-            : adminId;
+        const parentId = currentUser?.isSubUser
+            ? (currentUser.parentRecruiter?._id || currentUser.parentRecruiter)
+            : null;
+
+        const effectiveRecruiterId = parentId || adminId;
 
         if (isDbConnected()) {
+            const teamUserIds = [adminId, effectiveRecruiterId];
+            if (currentUser?.isSubUser && parentId) {
+                const siblings = await User.find({ parentRecruiter: parentId }).select("_id");
+                siblings.forEach((s) => teamUserIds.push(s._id));
+            } else if (!currentUser?.isSubUser) {
+                const subUsers = await User.find({ parentRecruiter: adminId }).select("_id");
+                subUsers.forEach((s) => teamUserIds.push(s._id));
+            }
+
+            const objectIds = [];
+            const stringIds = [];
+            teamUserIds.forEach((id) => {
+                if (!id) return;
+                stringIds.push(String(id));
+                if (mongoose.Types.ObjectId.isValid(id)) {
+                    objectIds.push(new mongoose.Types.ObjectId(id));
+                }
+            });
+
             const query = isAdminUser
                 ? {}
                 : {
                     $or: [
-                        { created_by: adminId },
-                        { created_by: effectiveRecruiterId },
-                        ...(mongoose.Types.ObjectId.isValid(adminId) ? [{ created_by: new mongoose.Types.ObjectId(adminId) }] : []),
-                        ...(mongoose.Types.ObjectId.isValid(effectiveRecruiterId) ? [{ created_by: new mongoose.Types.ObjectId(effectiveRecruiterId) }] : []),
+                        { created_by: { $in: objectIds } },
+                        { created_by: { $in: stringIds } },
                     ]
                 };
             const jobs = await Job.find(query)
@@ -254,12 +273,24 @@ export const getAdminJobs = async (req, res) => {
                 success: true,
             });
         } else {
+            const teamIds = [String(adminId), String(effectiveRecruiterId)];
+            if (currentUser?.isSubUser && parentId) {
+                mockStore.users
+                    .filter((u) => String(u.parentRecruiter) === String(parentId))
+                    .forEach((u) => teamIds.push(String(u._id)));
+            } else if (!currentUser?.isSubUser) {
+                mockStore.users
+                    .filter((u) => String(u.parentRecruiter) === String(adminId))
+                    .forEach((u) => teamIds.push(String(u._id)));
+            }
+
             const adminJobs = mockStore.jobs
                 .filter(
                     (j) => isAdminUser ||
-                        String(j.created_by) === String(adminId) ||
-                        String(j.created_by) === String(effectiveRecruiterId) ||
-                        adminId === "recruiter_1"
+                        teamIds.includes(String(j.created_by)) ||
+                        adminId === "recruiter_1" ||
+                        (currentUser?.isSubUser && String(j.created_by) === "recruiter_1") ||
+                        String(effectiveRecruiterId) === "recruiter_1"
                 )
                 .map((j) => {
                     let companyObj = j.company;

@@ -148,34 +148,39 @@ export const getCompany = async (req, res) => {
             if (currentUser?.role === "admin") isAdminUser = true;
         }
 
-        // Check if sub-user has permission to manage companies
-        if (currentUser?.isSubUser && !currentUser?.permissions?.canManageCompanies) {
-            return res.status(200).json({
-                companies: [],
-                success: true,
-                restricted: true,
-                message: "Sub-user account does not have permission to view/manage companies.",
-            });
-        }
+        // If sub-user, retrieve companies owned by the parent recruiter or team
+        const parentId = currentUser?.isSubUser
+            ? (currentUser.parentRecruiter?._id || currentUser.parentRecruiter)
+            : null;
 
-        // If sub-user has permission, check companies owned by user OR parent recruiter
-        const effectiveRecruiterId = currentUser?.isSubUser && currentUser?.parentRecruiter
-            ? currentUser.parentRecruiter
-            : userId;
+        const effectiveRecruiterId = parentId || userId;
 
         if (isDbConnected()) {
+            const teamUserIds = [userId, effectiveRecruiterId];
+            if (currentUser?.isSubUser && parentId) {
+                const siblings = await User.find({ parentRecruiter: parentId }).select("_id");
+                siblings.forEach((s) => teamUserIds.push(s._id));
+            } else if (!currentUser?.isSubUser) {
+                const subUsers = await User.find({ parentRecruiter: userId }).select("_id");
+                subUsers.forEach((s) => teamUserIds.push(s._id));
+            }
+
+            const objectIds = [];
+            const stringIds = [];
+            teamUserIds.forEach((id) => {
+                if (!id) return;
+                stringIds.push(String(id));
+                if (mongoose.Types.ObjectId.isValid(id)) {
+                    objectIds.push(new mongoose.Types.ObjectId(id));
+                }
+            });
+
             const query = isAdminUser
                 ? {}
                 : {
                     $or: [
-                        { userId: userId },
-                        { userId: effectiveRecruiterId },
-                        ...(mongoose.Types.ObjectId.isValid(userId)
-                            ? [{ userId: new mongoose.Types.ObjectId(userId) }]
-                            : []),
-                        ...(mongoose.Types.ObjectId.isValid(effectiveRecruiterId)
-                            ? [{ userId: new mongoose.Types.ObjectId(effectiveRecruiterId) }]
-                            : []),
+                        { userId: { $in: objectIds } },
+                        { userId: { $in: stringIds } },
                     ],
                 };
             const companies = await Company.find(query).sort({ createdAt: -1 });
@@ -184,11 +189,23 @@ export const getCompany = async (req, res) => {
                 success: true,
             });
         } else {
+            const teamIds = [String(userId), String(effectiveRecruiterId)];
+            if (currentUser?.isSubUser && parentId) {
+                mockStore.users
+                    .filter((u) => String(u.parentRecruiter) === String(parentId))
+                    .forEach((u) => teamIds.push(String(u._id)));
+            } else if (!currentUser?.isSubUser) {
+                mockStore.users
+                    .filter((u) => String(u.parentRecruiter) === String(userId))
+                    .forEach((u) => teamIds.push(String(u._id)));
+            }
+
             const userCompanies = mockStore.companies.filter(
                 (c) => isAdminUser ||
-                    String(c.userId) === String(userId) ||
-                    String(c.userId) === String(effectiveRecruiterId) ||
-                    userId === "recruiter_1"
+                    teamIds.includes(String(c.userId)) ||
+                    userId === "recruiter_1" ||
+                    (currentUser?.isSubUser && String(c.userId) === "recruiter_1") ||
+                    String(effectiveRecruiterId) === "recruiter_1"
             );
             return res.status(200).json({
                 companies: userCompanies,
