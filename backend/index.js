@@ -1,4 +1,6 @@
 import express from "express";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -13,6 +15,7 @@ import applicationRoute from "./routes/application.route.js";
 import aiRoute from "./routes/ai.route.js";
 import interviewRoute from "./routes/interview.route.js";
 import adminRoute from "./routes/admin.route.js";
+import { setupInterviewSocket } from "./socket/interviewSocket.js";
 
 dotenv.config({});
 
@@ -21,6 +24,20 @@ const __dirname = path.dirname(__filename);
 const frontendDir = path.resolve(__dirname, "../frontend");
 
 const app = express();
+const server = http.createServer(app);
+
+// Socket.io initialization with CORS
+const io = new SocketIOServer(server, {
+    cors: {
+        origin: (origin, callback) => {
+            callback(null, true);
+        },
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    },
+});
+
+setupInterviewSocket(io);
 
 // CORS Configuration - Fully supports separate Vercel frontend and Render backend
 const corsOptions = {
@@ -130,7 +147,7 @@ async function startServer() {
     }
 
     const PORT = process.env.PORT || 3000;
-    app.listen(PORT, "0.0.0.0", () => {
+    server.listen(PORT, "0.0.0.0", () => {
         console.log(`HireHub server listening on http://0.0.0.0:${PORT}`);
         connectDB().catch((err) => {
             console.warn("Database connection failed on startup:", err.message);
