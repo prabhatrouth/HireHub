@@ -21,12 +21,15 @@ import {
     X,
     Eye,
     Video,
-    Calendar
+    Calendar,
+    Lock
 } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import { toast } from 'sonner';
 import { APPLICATION_API_END_POINT } from '@/utils/constant';
 import axios from 'axios';
 import ScheduleInterviewDialog from './ScheduleInterviewDialog';
+import { canFinalizeHiringDecision, canAccessInterviews } from '@/utils/permissions';
 
 const shortlistingStatus = ["Accepted", "Rejected"];
 
@@ -64,6 +67,10 @@ const getStatusBadge = (status) => {
 };
 
 const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = 'table', onStatusUpdate, loading = false, jobData = null }) => {
+    const { user } = useSelector((store) => store.auth);
+    const allowDecision = canFinalizeHiringDecision(user);
+    const allowInterview = canAccessInterviews(user);
+
     const [selectedApplicant, setSelectedApplicant] = useState(null);
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -71,11 +78,19 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
     const [updatingId, setUpdatingId] = useState(null);
 
     const openScheduleModal = (item) => {
+        if (!allowInterview) {
+            toast.error("Access restricted: You do not have permission to conduct or schedule interviews.");
+            return;
+        }
         setInterviewApplicant(item);
         setIsScheduleModalOpen(true);
     };
 
     const statusHandler = async (status, id) => {
+        if (!allowDecision) {
+            toast.error("Access restricted: Only lead recruiters or sub-users with hiring decision authority can change status.");
+            return;
+        }
         setUpdatingId(id);
         try {
             axios.defaults.withCredentials = true;
@@ -237,14 +252,16 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                 </div>
 
                                 <div className="flex items-center gap-1.5">
-                                    <Button
-                                        size="sm"
-                                        onClick={() => openScheduleModal(item)}
-                                        className="h-8 text-xs font-semibold bg-[#6A38C2] hover:bg-[#582ea8] text-white"
-                                    >
-                                        <Video className="w-3 h-3 mr-1" />
-                                        Interview
-                                    </Button>
+                                    {allowInterview && (
+                                        <Button
+                                            size="sm"
+                                            onClick={() => openScheduleModal(item)}
+                                            className="h-8 text-xs font-semibold bg-[#6A38C2] hover:bg-[#582ea8] text-white"
+                                        >
+                                            <Video className="w-3 h-3 mr-1" />
+                                            Interview
+                                        </Button>
+                                    )}
 
                                     <Button
                                         variant="outline"
@@ -262,19 +279,29 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                                 <MoreHorizontal className="h-4 w-4" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent align="end" className="w-36 p-1">
-                                            {shortlistingStatus.map((status, index) => (
-                                                <button
-                                                    key={index}
-                                                    onClick={() => statusHandler(status, item?._id)}
-                                                    className={`w-full text-left px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-between ${
-                                                        status === 'Accepted' ? 'hover:bg-emerald-50 text-emerald-700' : 'hover:bg-rose-50 text-rose-700'
-                                                    }`}
-                                                >
-                                                    <span>Mark {status}</span>
-                                                    {status === 'Accepted' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                                                </button>
-                                            ))}
+                                        <PopoverContent align="end" className="w-44 p-1">
+                                            {allowDecision ? (
+                                                shortlistingStatus.map((status, index) => (
+                                                    <button
+                                                        key={index}
+                                                        onClick={() => statusHandler(status, item?._id)}
+                                                        className={`w-full text-left px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-between ${
+                                                            status === 'Accepted' ? 'hover:bg-emerald-50 text-emerald-700' : 'hover:bg-rose-50 text-rose-700'
+                                                        }`}
+                                                    >
+                                                        <span>Mark {status}</span>
+                                                        {status === 'Accepted' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="p-2.5 text-center">
+                                                    <Lock className="w-3.5 h-3.5 text-slate-400 mx-auto mb-1" />
+                                                    <p className="text-xs font-bold text-slate-700">Decision Restricted</p>
+                                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                                                        Requires Lead Recruiter permission
+                                                    </p>
+                                                </div>
+                                            )}
                                         </PopoverContent>
                                     </Popover>
                                 </div>
@@ -411,14 +438,16 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                         {/* Action Dropdown */}
                                         <TableCell className="py-3 text-right pr-4">
                                             <div className="flex items-center justify-end gap-1.5">
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => openScheduleModal(item)}
-                                                    className="h-8 text-xs font-semibold bg-[#6A38C2] hover:bg-[#582ea8] text-white shadow-xs"
-                                                >
-                                                    <Video className="w-3 h-3 mr-1" />
-                                                    Schedule Call
-                                                </Button>
+                                                {allowInterview && (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => openScheduleModal(item)}
+                                                        className="h-8 text-xs font-semibold bg-[#6A38C2] hover:bg-[#582ea8] text-white shadow-xs"
+                                                    >
+                                                        <Video className="w-3 h-3 mr-1" />
+                                                        Schedule Call
+                                                    </Button>
+                                                )}
 
                                                 <Button
                                                     variant="outline"
@@ -436,19 +465,29 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                                                             <MoreHorizontal className="h-4 w-4" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent align="end" className="w-36 p-1">
-                                                        {shortlistingStatus.map((status, index) => (
-                                                            <button
-                                                                key={index}
-                                                                onClick={() => statusHandler(status, item?._id)}
-                                                                className={`w-full text-left px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-between ${
-                                                                    status === 'Accepted' ? 'hover:bg-emerald-50 text-emerald-700' : 'hover:bg-rose-50 text-rose-700'
-                                                                }`}
-                                                            >
-                                                                <span>Mark {status}</span>
-                                                                {status === 'Accepted' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                                                            </button>
-                                                        ))}
+                                                    <PopoverContent align="end" className="w-44 p-1">
+                                                        {allowDecision ? (
+                                                            shortlistingStatus.map((status, index) => (
+                                                                <button
+                                                                    key={index}
+                                                                    onClick={() => statusHandler(status, item?._id)}
+                                                                    className={`w-full text-left px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-between ${
+                                                                        status === 'Accepted' ? 'hover:bg-emerald-50 text-emerald-700' : 'hover:bg-rose-50 text-rose-700'
+                                                                    }`}
+                                                                >
+                                                                    <span>Mark {status}</span>
+                                                                    {status === 'Accepted' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                                </button>
+                                                            ))
+                                                        ) : (
+                                                            <div className="p-2.5 text-center">
+                                                                <Lock className="w-3.5 h-3.5 text-slate-400 mx-auto mb-1" />
+                                                                <p className="text-xs font-bold text-slate-700">Decision Restricted</p>
+                                                                <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                                                                    Requires Lead Recruiter permission
+                                                                </p>
+                                                            </div>
+                                                        )}
                                                     </PopoverContent>
                                                 </Popover>
                                             </div>

@@ -35,6 +35,8 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import { INTERVIEW_API_END_POINT } from '@/utils/constant';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { useSelector } from 'react-redux';
+import { canManageSubUsers } from '@/utils/permissions';
 
 const PRESET_ROLES = [
     'Domain Subject Matter Expert',
@@ -62,6 +64,8 @@ const PRESET_DEPARTMENTS = [
 ];
 
 const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = false }) => {
+    const { user } = useSelector((store) => store.auth);
+    const allowManageTeam = canManageSubUsers(user);
     const [subUsers, setSubUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -305,6 +309,18 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
         navigator.clipboard.writeText(text);
         toast.success(`Copied ${label} to clipboard!`);
     };
+
+    if (!isSelectionMode && !allowManageTeam) {
+        return (
+            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs">
+                <Lock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-base font-bold text-slate-800">Panel & Sub-User Management Restricted</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                    Only primary Lead Recruiters can configure interviewer panels, create sub-users, or assign delegation permissions.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

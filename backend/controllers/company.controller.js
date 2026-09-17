@@ -17,6 +17,23 @@ export const registerCompany = async (req, res) => {
             });
         }
 
+        // Check sub-user permission
+        let currentUser = null;
+        if (isDbConnected()) {
+            if (mongoose.Types.ObjectId.isValid(req.id)) {
+                currentUser = await User.findById(req.id).catch(() => null);
+            }
+        } else {
+            currentUser = mockStore.users.find((u) => String(u._id) === String(req.id));
+        }
+
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canManageCompanies) {
+            return res.status(403).json({
+                message: "Access Denied: Your account does not have permission to register companies. Please contact your lead recruiter to grant 'canManageCompanies' permission.",
+                success: false,
+            });
+        }
+
         const trimmedName = companyName.trim();
 
         if (isDbConnected()) {
@@ -119,16 +136,32 @@ export const getCompany = async (req, res) => {
     try {
         const userId = req.id; // logged in user id
 
+        let currentUser = null;
         let isAdminUser = false;
         if (isDbConnected()) {
             if (mongoose.Types.ObjectId.isValid(userId)) {
-                const u = await User.findById(userId).catch(() => null);
-                if (u?.role === "admin") isAdminUser = true;
+                currentUser = await User.findById(userId).catch(() => null);
+                if (currentUser?.role === "admin") isAdminUser = true;
             }
         } else {
-            const u = mockStore.users.find((u) => String(u._id) === String(userId));
-            if (u?.role === "admin") isAdminUser = true;
+            currentUser = mockStore.users.find((u) => String(u._id) === String(userId));
+            if (currentUser?.role === "admin") isAdminUser = true;
         }
+
+        // Check if sub-user has permission to manage companies
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canManageCompanies) {
+            return res.status(200).json({
+                companies: [],
+                success: true,
+                restricted: true,
+                message: "Sub-user account does not have permission to view/manage companies.",
+            });
+        }
+
+        // If sub-user has permission, check companies owned by user OR parent recruiter
+        const effectiveRecruiterId = currentUser?.isSubUser && currentUser?.parentRecruiter
+            ? currentUser.parentRecruiter
+            : userId;
 
         if (isDbConnected()) {
             const query = isAdminUser
@@ -136,8 +169,12 @@ export const getCompany = async (req, res) => {
                 : {
                     $or: [
                         { userId: userId },
+                        { userId: effectiveRecruiterId },
                         ...(mongoose.Types.ObjectId.isValid(userId)
                             ? [{ userId: new mongoose.Types.ObjectId(userId) }]
+                            : []),
+                        ...(mongoose.Types.ObjectId.isValid(effectiveRecruiterId)
+                            ? [{ userId: new mongoose.Types.ObjectId(effectiveRecruiterId) }]
                             : []),
                     ],
                 };
@@ -148,7 +185,10 @@ export const getCompany = async (req, res) => {
             });
         } else {
             const userCompanies = mockStore.companies.filter(
-                (c) => isAdminUser || String(c.userId) === String(userId) || userId === "recruiter_1"
+                (c) => isAdminUser ||
+                    String(c.userId) === String(userId) ||
+                    String(c.userId) === String(effectiveRecruiterId) ||
+                    userId === "recruiter_1"
             );
             return res.status(200).json({
                 companies: userCompanies,
@@ -207,6 +247,23 @@ export const getCompanyById = async (req, res) => {
 
 export const updateCompany = async (req, res) => {
     try {
+        // Sub-user permission check
+        let currentUser = null;
+        if (isDbConnected()) {
+            if (mongoose.Types.ObjectId.isValid(req.id)) {
+                currentUser = await User.findById(req.id).catch(() => null);
+            }
+        } else {
+            currentUser = mockStore.users.find((u) => String(u._id) === String(req.id));
+        }
+
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canManageCompanies) {
+            return res.status(403).json({
+                message: "Access Denied: Your sub-user account does not have permission to edit company profiles.",
+                success: false,
+            });
+        }
+
         const { name, description, website, location } = req.body;
         const file = req.file;
 

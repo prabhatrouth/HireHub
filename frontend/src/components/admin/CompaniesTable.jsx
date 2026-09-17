@@ -3,12 +3,15 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
-import { Edit2, MoreHorizontal, Building2, ExternalLink } from 'lucide-react';
+import { Edit2, MoreHorizontal, Building2, ExternalLink, Lock } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { canManageCompanies } from '@/utils/permissions';
 
 const CompaniesTable = () => {
     const { companies, searchCompanyByText } = useSelector((store) => store.company);
+    const { user } = useSelector((store) => store.auth);
+    const allowManage = canManageCompanies(user);
     const [filterCompany, setFilterCompany] = useState(companies || []);
     const navigate = useNavigate();
 
@@ -86,15 +89,22 @@ const CompaniesTable = () => {
                             {/* Action */}
                             <TableCell className="py-3 text-right pr-4">
                                 <div className="flex items-center justify-end gap-1.5">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => navigate(`/admin/companies/${company._id}`)}
-                                        className="h-7 text-xs font-semibold border-gray-200 hover:bg-gray-50"
-                                    >
-                                        <Edit2 className="w-3 h-3 mr-1" />
-                                        Edit
-                                    </Button>
+                                    {allowManage ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => navigate(`/admin/companies/${company._id}`)}
+                                            className="h-7 text-xs font-semibold border-gray-200 hover:bg-gray-50"
+                                        >
+                                            <Edit2 className="w-3 h-3 mr-1" />
+                                            Edit
+                                        </Button>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200" title="Editing company profile is restricted to lead recruiters">
+                                            <Lock className="w-3 h-3 text-slate-400" />
+                                            View Only
+                                        </span>
+                                    )}
                                 </div>
                             </TableCell>
                         </TableRow>

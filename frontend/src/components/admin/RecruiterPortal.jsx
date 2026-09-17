@@ -29,12 +29,23 @@ import {
     FileSpreadsheet,
     Zap,
     Video,
-    CalendarCheck
+    CalendarCheck,
+    Shield,
+    Lock
 } from 'lucide-react';
 import useGetAllAdminJobs from '@/hooks/useGetAllAdminJobs';
 import useGetAllCompanies from '@/hooks/useGetAllCompanies';
 import ScheduledInterviewsList from '../interview/ScheduledInterviewsList';
 import TechnicalInterviewersManager from './TechnicalInterviewersManager';
+import {
+    canManageSubUsers,
+    canManageCompanies,
+    canPostJobs,
+    canViewAllApplicants,
+    canAccessInterviews,
+    PERMISSION_LABELS,
+    getGrantedPermissions
+} from '@/utils/permissions';
 
 const RecruiterPortal = () => {
     useGetAllAdminJobs();
@@ -46,8 +57,37 @@ const RecruiterPortal = () => {
     const navigate = useNavigate();
 
     const [searchParams, setSearchParams] = useSearchParams();
-    const initialTab = searchParams.get('tab') || 'overview';
+
+    // Permission flags
+    const userCanManageCompanies = canManageCompanies(user);
+    const userCanPostJobs = canPostJobs(user);
+    const userCanViewApplicants = canViewAllApplicants(user);
+    const userCanAccessInterviews = canAccessInterviews(user);
+    const userCanManageSubUsers = canManageSubUsers(user);
+    const canSeeOverview = userCanPostJobs || userCanViewApplicants;
+
+    const availableTabs = [
+        ...(canSeeOverview ? [{ id: 'overview', label: `Overview & Jobs (${allAdminJobs?.length || 0})`, icon: BarChart3 }] : []),
+        ...(userCanAccessInterviews ? [{ id: 'interviews', label: 'Live Video Interviews & Scorecards', icon: Video, color: 'text-rose-400' }] : []),
+        ...(userCanManageSubUsers ? [{ id: 'interviewers', label: 'Technical Interviewers Panel', icon: Users, color: 'text-indigo-400' }] : []),
+        ...(userCanPostJobs ? [{ id: 'ai-generator', label: 'AI Job Description Studio', icon: Sparkles, color: 'text-[#6A38C2]' }] : []),
+        ...(userCanManageCompanies ? [{ id: 'companies', label: `Companies (${companies?.length || 0})`, icon: Building2, color: 'text-[#6A38C2]' }] : []),
+    ];
+
+    const defaultTab = availableTabs[0]?.id || 'overview';
+    const requestedTab = searchParams.get('tab');
+    const initialTab = availableTabs.some(t => t.id === requestedTab) ? requestedTab : defaultTab;
     const [activeTab, setActiveTab] = useState(initialTab);
+
+    // Synchronize tab with search params and permissions
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab && availableTabs.some(t => t.id === tab)) {
+            setActiveTab(tab);
+        } else if (availableTabs.length > 0 && !availableTabs.some(t => t.id === activeTab)) {
+            setActiveTab(availableTabs[0].id);
+        }
+    }, [searchParams, availableTabs, activeTab]);
 
     // AI Job generator in portal
     const [jobForm, setJobForm] = useState({
@@ -60,11 +100,6 @@ const RecruiterPortal = () => {
     });
     const [generatingJobDesc, setGeneratingJobDesc] = useState(false);
     const [generatedJobDesc, setGeneratedJobDesc] = useState(null);
-
-    useEffect(() => {
-        const tab = searchParams.get('tab');
-        if (tab) setActiveTab(tab);
-    }, [searchParams]);
 
     const handleTabChange = (tabId) => {
         setActiveTab(tabId);
@@ -99,6 +134,7 @@ const RecruiterPortal = () => {
     const totalPostings = allAdminJobs?.length || 0;
     const totalCompanies = companies?.length || 0;
     const totalApplications = (allAdminJobs || []).reduce((acc, job) => acc + (job.applications?.length || 0), 0);
+    const grantedPermList = getGrantedPermissions(user);
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-between">
@@ -110,116 +146,102 @@ const RecruiterPortal = () => {
                     <div className="max-w-7xl mx-auto">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                             <div>
-                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-semibold uppercase tracking-wider mb-3">
-                                    <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                                    Recruiter Command Center
-                                </div>
+                                {user?.isSubUser ? (
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-200 text-xs font-semibold uppercase tracking-wider mb-3">
+                                        <Shield className="w-3.5 h-3.5 text-amber-300" />
+                                        Sub-User Panel • {user?.subRole || 'Interviewer'}
+                                    </div>
+                                ) : (
+                                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs font-semibold uppercase tracking-wider mb-3">
+                                        <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                                        Recruiter Command Center
+                                    </div>
+                                )}
                                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
-                                    Talent & Hiring Hub
+                                    {user?.isSubUser ? 'Recruitment Workspace' : 'Talent & Hiring Hub'}
                                 </h1>
                                 <p className="text-xs sm:text-sm text-purple-200 mt-1 max-w-2xl leading-relaxed">
-                                    Manage your companies, post AI-optimized job listings, and rank candidate applications with our automated ATS scoring matrix.
+                                    {user?.isSubUser
+                                        ? `Operating with specific capabilities assigned by your lead recruiter (${user?.parentRecruiter || 'Lead Recruiter'}). Unauthorized areas remain restricted.`
+                                        : 'Manage your companies, post AI-optimized job listings, and rank candidate applications with our automated ATS scoring matrix.'}
                                 </p>
                             </div>
 
-                            {/* Quick Action Buttons */}
+                            {/* Quick Action Buttons - Only show actions authorized for this user */}
                             <div className="flex flex-wrap items-center gap-3">
-                                <Link to="/admin/companies/create">
-                                    <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs font-semibold">
-                                        <Building2 className="w-3.5 h-3.5 mr-1.5" />
-                                        New Company
-                                    </Button>
-                                </Link>
-                                <Link to="/admin/jobs/create">
-                                    <Button className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-semibold shadow-md">
-                                        <PlusCircle className="w-3.5 h-3.5 mr-1.5" />
-                                        Post New Job
-                                    </Button>
-                                </Link>
+                                {userCanManageCompanies && (
+                                    <Link to="/admin/companies/create">
+                                        <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs font-semibold">
+                                            <Building2 className="w-3.5 h-3.5 mr-1.5" />
+                                            New Company
+                                        </Button>
+                                    </Link>
+                                )}
+                                {userCanPostJobs && (
+                                    <Link to="/admin/jobs/create">
+                                        <Button className="bg-[#6A38C2] hover:bg-[#582ea8] text-white text-xs font-semibold shadow-md">
+                                            <PlusCircle className="w-3.5 h-3.5 mr-1.5" />
+                                            Post New Job
+                                        </Button>
+                                    </Link>
+                                )}
                             </div>
                         </div>
 
-                        {/* Top KPI Cards */}
+                        {/* Top KPI Cards / Sub-User Permissions summary */}
                         <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
-                                <p className="text-xs font-medium text-purple-200">Active Job Postings</p>
-                                <p className="text-2xl font-extrabold text-white mt-1">{totalPostings}</p>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
-                                <p className="text-xs font-medium text-purple-200">Registered Companies</p>
-                                <p className="text-2xl font-extrabold text-white mt-1">{totalCompanies}</p>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
-                                <p className="text-xs font-medium text-purple-200">Total Applicants</p>
-                                <p className="text-2xl font-extrabold text-emerald-400 mt-1">{totalApplications}</p>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
-                                <p className="text-xs font-medium text-purple-200">AI Screening Matrix</p>
-                                <p className="text-2xl font-extrabold text-purple-300 mt-1">Active</p>
-                            </div>
+                            {canSeeOverview && (
+                                <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+                                    <p className="text-xs font-medium text-purple-200">Active Job Postings</p>
+                                    <p className="text-2xl font-extrabold text-white mt-1">{totalPostings}</p>
+                                </div>
+                            )}
+                            {userCanManageCompanies && (
+                                <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+                                    <p className="text-xs font-medium text-purple-200">Registered Companies</p>
+                                    <p className="text-2xl font-extrabold text-white mt-1">{totalCompanies}</p>
+                                </div>
+                            )}
+                            {userCanViewApplicants && (
+                                <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+                                    <p className="text-xs font-medium text-purple-200">Total Applicants</p>
+                                    <p className="text-2xl font-extrabold text-emerald-400 mt-1">{totalApplications}</p>
+                                </div>
+                            )}
+                            {user?.isSubUser ? (
+                                <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+                                    <p className="text-xs font-medium text-amber-200">Active Permissions</p>
+                                    <p className="text-2xl font-extrabold text-amber-300 mt-1">{grantedPermList.length}</p>
+                                    <p className="text-[10px] text-purple-200 mt-0.5">Granted by Lead</p>
+                                </div>
+                            ) : (
+                                <div className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+                                    <p className="text-xs font-medium text-purple-200">AI Screening Matrix</p>
+                                    <p className="text-2xl font-extrabold text-purple-300 mt-1">Active</p>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Navigation Tabs */}
+                        {/* Navigation Tabs - Dynamically rendered based on allowed permissions */}
                         <div className="mt-8 flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                            <button
-                                onClick={() => handleTabChange('overview')}
-                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                                    activeTab === 'overview'
-                                        ? 'bg-white text-gray-900 shadow-md'
-                                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
-                                }`}
-                            >
-                                <BarChart3 className="w-4 h-4 text-[#6A38C2]" />
-                                Overview & Jobs ({totalPostings})
-                            </button>
-
-                            <button
-                                onClick={() => handleTabChange('interviews')}
-                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                                    activeTab === 'interviews'
-                                        ? 'bg-white text-gray-900 shadow-md'
-                                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
-                                    }`}
-                            >
-                                <Video className="w-4 h-4 text-rose-400" />
-                                Live Video Interviews & Scorecards
-                            </button>
-
-                            <button
-                                onClick={() => handleTabChange('interviewers')}
-                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                                    activeTab === 'interviewers'
-                                        ? 'bg-white text-gray-900 shadow-md'
-                                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
-                                    }`}
-                            >
-                                <Users className="w-4 h-4 text-indigo-400" />
-                                Technical Interviewers Panel
-                            </button>
-
-                            <button
-                                onClick={() => handleTabChange('ai-generator')}
-                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                                    activeTab === 'ai-generator'
-                                        ? 'bg-white text-gray-900 shadow-md'
-                                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
-                                }`}
-                            >
-                                <Sparkles className="w-4 h-4 text-[#6A38C2]" />
-                                AI Job Description Studio
-                            </button>
-
-                            <button
-                                onClick={() => handleTabChange('companies')}
-                                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                                    activeTab === 'companies'
-                                        ? 'bg-white text-gray-900 shadow-md'
-                                        : 'bg-white/10 text-purple-200 hover:bg-white/20'
-                                }`}
-                            >
-                                <Building2 className="w-4 h-4 text-[#6A38C2]" />
-                                Companies ({totalCompanies})
-                            </button>
+                            {availableTabs.map((tab) => {
+                                const Icon = tab.icon;
+                                const isActive = activeTab === tab.id;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => handleTabChange(tab.id)}
+                                        className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                                            isActive
+                                                ? 'bg-white text-gray-900 shadow-md'
+                                                : 'bg-white/10 text-purple-200 hover:bg-white/20'
+                                        }`}
+                                    >
+                                        <Icon className={`w-4 h-4 ${tab.color || 'text-[#6A38C2]'}`} />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -240,12 +262,14 @@ const RecruiterPortal = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Link to="/admin/jobs/create">
-                                        <Button size="sm" className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold gap-1.5">
-                                            <PlusCircle className="w-3.5 h-3.5" />
-                                            Post Job
-                                        </Button>
-                                    </Link>
+                                    {userCanPostJobs && (
+                                        <Link to="/admin/jobs/create">
+                                            <Button size="sm" className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold gap-1.5">
+                                                <PlusCircle className="w-3.5 h-3.5" />
+                                                Post Job
+                                            </Button>
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
 
@@ -257,11 +281,15 @@ const RecruiterPortal = () => {
                                     <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto mb-4">
                                         Create a company profile first and start posting jobs with automated AI candidate evaluation.
                                     </p>
-                                    <Link to="/admin/jobs/create">
-                                        <Button className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold">
-                                            Create First Job Listing
-                                        </Button>
-                                    </Link>
+                                    {userCanPostJobs ? (
+                                        <Link to="/admin/jobs/create">
+                                            <Button className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold">
+                                                Create First Job Listing
+                                            </Button>
+                                        </Link>
+                                    ) : (
+                                        <p className="text-xs text-slate-400">Posting jobs requires lead recruiter authorization.</p>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -302,12 +330,19 @@ const RecruiterPortal = () => {
                                                 <span className="text-xs font-bold text-gray-800">
                                                     {job.salary ? `${job.salary} LPA` : 'Competitive'}
                                                 </span>
-                                                <Link to={`/admin/jobs/${job._id}/applicants`}>
-                                                    <Button size="sm" variant="outline" className="text-xs font-semibold gap-1 hover:bg-purple-50 hover:text-[#6A38C2] hover:border-purple-200">
-                                                        <Users className="w-3.5 h-3.5" />
-                                                        AI Applicant Matrix
-                                                    </Button>
-                                                </Link>
+                                                {userCanViewApplicants ? (
+                                                    <Link to={`/admin/jobs/${job._id}/applicants`}>
+                                                        <Button size="sm" variant="outline" className="text-xs font-semibold gap-1 hover:bg-purple-50 hover:text-[#6A38C2] hover:border-purple-200">
+                                                            <Users className="w-3.5 h-3.5" />
+                                                            AI Applicant Matrix
+                                                        </Button>
+                                                    </Link>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200" title="Permission required to view applicants">
+                                                        <Lock className="w-3 h-3 text-slate-400" />
+                                                        Applicant Pipeline
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -507,12 +542,14 @@ const RecruiterPortal = () => {
                                         Set up company profiles, branding logos, and location details.
                                     </p>
                                 </div>
-                                <Link to="/admin/companies/create">
-                                    <Button size="sm" className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold gap-1.5">
-                                        <PlusCircle className="w-3.5 h-3.5" />
-                                        Register New Company
-                                    </Button>
-                                </Link>
+                                {userCanManageCompanies && (
+                                    <Link to="/admin/companies/create">
+                                        <Button size="sm" className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold gap-1.5">
+                                            <PlusCircle className="w-3.5 h-3.5" />
+                                            Register New Company
+                                        </Button>
+                                    </Link>
+                                )}
                             </div>
 
                             {companies?.length === 0 ? (
@@ -522,11 +559,15 @@ const RecruiterPortal = () => {
                                     <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto mb-4">
                                         Register your company name and logo to attach when publishing job openings.
                                     </p>
-                                    <Link to="/admin/companies/create">
-                                        <Button className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold">
-                                            Register Company
-                                        </Button>
-                                    </Link>
+                                    {userCanManageCompanies ? (
+                                        <Link to="/admin/companies/create">
+                                            <Button className="bg-[#6A38C2] hover:bg-[#582da5] text-white text-xs font-semibold">
+                                                Register Company
+                                            </Button>
+                                        </Link>
+                                    ) : (
+                                        <p className="text-xs text-slate-400">Company creation is managed by the lead recruiter.</p>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

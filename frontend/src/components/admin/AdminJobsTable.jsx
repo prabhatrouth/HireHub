@@ -4,14 +4,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Edit2, Eye, MoreHorizontal, Users, Sparkles, Building2, Calendar } from 'lucide-react';
+import { Edit2, Eye, MoreHorizontal, Users, Sparkles, Building2, Calendar, Lock } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { canViewAllApplicants } from '@/utils/permissions';
 
 const AdminJobsTable = () => {
     const { allAdminJobs, searchJobByText } = useSelector((store) => store.job);
+    const { user } = useSelector((store) => store.auth);
     const [filterJobs, setFilterJobs] = useState(allAdminJobs || []);
     const navigate = useNavigate();
+    const allowViewApplicants = canViewAllApplicants(user);
 
     useEffect(() => {
         const filteredJobs = (allAdminJobs || []).filter((job) => {
@@ -92,14 +95,21 @@ const AdminJobsTable = () => {
 
                                 {/* Applicants with AI Screening link */}
                                 <TableCell className="py-3">
-                                    <button
-                                        onClick={() => navigate(`/admin/jobs/${job._id}/applicants`)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-[#6A38C2] border border-purple-200 hover:bg-purple-100 transition-colors"
-                                    >
-                                        <Users className="w-3 h-3" />
-                                        {applicantCount} {applicantCount === 1 ? 'Applicant' : 'Applicants'}
-                                        <Sparkles className="w-2.5 h-2.5 text-purple-600 ml-0.5" />
-                                    </button>
+                                    {allowViewApplicants ? (
+                                        <button
+                                            onClick={() => navigate(`/admin/jobs/${job._id}/applicants`)}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-[#6A38C2] border border-purple-200 hover:bg-purple-100 transition-colors"
+                                        >
+                                            <Users className="w-3 h-3" />
+                                            {applicantCount} {applicantCount === 1 ? 'Applicant' : 'Applicants'}
+                                            <Sparkles className="w-2.5 h-2.5 text-purple-600 ml-0.5" />
+                                        </button>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200" title="Permission required to view applicant pipeline">
+                                            <Lock className="w-3 h-3 text-slate-400" />
+                                            {applicantCount} Applicants
+                                        </span>
+                                    )}
                                 </TableCell>
 
                                 {/* Date */}
@@ -110,15 +120,17 @@ const AdminJobsTable = () => {
                                 {/* Actions */}
                                 <TableCell className="py-3 text-right pr-4">
                                     <div className="flex items-center justify-end gap-1.5">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => navigate(`/admin/jobs/${job._id}/applicants`)}
-                                            className="h-7 text-xs font-semibold border-purple-200 text-[#6A38C2] hover:bg-purple-50"
-                                        >
-                                            <Eye className="w-3 h-3 mr-1" />
-                                            ATS Portal
-                                        </Button>
+                                        {allowViewApplicants && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => navigate(`/admin/jobs/${job._id}/applicants`)}
+                                                className="h-7 text-xs font-semibold border-purple-200 text-[#6A38C2] hover:bg-purple-50"
+                                            >
+                                                <Eye className="w-3 h-3 mr-1" />
+                                                ATS Portal
+                                            </Button>
+                                        )}
 
                                         <Popover>
                                             <PopoverTrigger asChild>
@@ -127,13 +139,15 @@ const AdminJobsTable = () => {
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent align="end" className="w-40 p-1">
-                                                <button
-                                                    onClick={() => navigate(`/admin/jobs/${job._id}/applicants`)}
-                                                    className="w-full text-left px-3 py-1.5 text-xs font-medium rounded-md hover:bg-purple-50 text-gray-700 flex items-center gap-2"
-                                                >
-                                                    <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
-                                                    <span>View AI Ranking</span>
-                                                </button>
+                                                {allowViewApplicants && (
+                                                    <button
+                                                        onClick={() => navigate(`/admin/jobs/${job._id}/applicants`)}
+                                                        className="w-full text-left px-3 py-1.5 text-xs font-medium rounded-md hover:bg-purple-50 text-gray-700 flex items-center gap-2"
+                                                    >
+                                                        <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
+                                                        <span>View AI Ranking</span>
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => navigate(`/description/${job._id}`)}
                                                     className="w-full text-left px-3 py-1.5 text-xs font-medium rounded-md hover:bg-gray-50 text-gray-700 flex items-center gap-2"

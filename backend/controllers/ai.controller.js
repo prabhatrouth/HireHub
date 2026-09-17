@@ -334,6 +334,22 @@ export const generateJobDescription = async (req, res) => {
             return res.status(400).json({ message: "Job title is required to generate description.", success: false });
         }
 
+        // Check sub-user permission
+        if (req.id) {
+            let currentUser = null;
+            if (isDbConnected()) {
+                currentUser = await User.findById(req.id).lean().catch(() => null);
+            } else {
+                currentUser = mockStore.users.find((u) => String(u._id) === String(req.id));
+            }
+            if (currentUser?.isSubUser && !currentUser?.permissions?.canPostJobs) {
+                return res.status(403).json({
+                    message: "Access Denied: Your sub-user account does not have permission to use the AI Job Description Generator.",
+                    success: false,
+                });
+            }
+        }
+
         const generatedData = await generateJobDescriptionWithAI({
             title,
             companyName,

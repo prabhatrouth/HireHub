@@ -28,6 +28,14 @@ import axios from 'axios';
 import { USER_API_END_POINT } from '@/utils/constant';
 import { setUser } from '@/redux/authSlice';
 import { toast } from 'sonner';
+import {
+    hasPermission,
+    canManageSubUsers,
+    canManageCompanies,
+    canPostJobs,
+    canViewAllApplicants,
+    canAccessInterviews
+} from '@/utils/permissions';
 
 const Navbar = () => {
     const { user } = useSelector((store) => store.auth);
@@ -156,59 +164,69 @@ const Navbar = () => {
                                     }`}
                                 >
                                     <Sparkles className="w-3.5 h-3.5 text-[#6A38C2]" />
-                                    Recruiter Hub
+                                    {user.isSubUser ? 'My Workspace' : 'Recruiter Hub'}
                                 </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviews"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        location.search.includes('tab=interviews')
-                                            ? 'bg-rose-50 text-rose-700 font-bold'
-                                            : 'text-slate-600 hover:text-rose-600 hover:bg-rose-50/50'
-                                    }`}
-                                >
-                                    <Video className="w-3.5 h-3.5 text-rose-500" />
-                                    Live Interviews
-                                </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviewers"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        location.search.includes('tab=interviewers')
-                                            ? 'bg-indigo-50 text-indigo-700 font-bold'
-                                            : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
-                                    }`}
-                                >
-                                    <Users className="w-3.5 h-3.5 text-indigo-600" />
-                                    Sub-Users & Panel
-                                </Link>
-                                <Link
-                                    to="/admin/companies"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        isActive('/admin/companies')
-                                            ? 'bg-purple-50 text-[#6A38C2]'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Building2 className="w-3.5 h-3.5" />
-                                    Companies
-                                </Link>
-                                <Link
-                                    to="/admin/jobs"
-                                    className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                                        isActive('/admin/jobs') && !isActive('/admin/jobs/create')
-                                            ? 'bg-purple-50 text-[#6A38C2]'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Briefcase className="w-3.5 h-3.5" />
-                                    Jobs & Applicants
-                                </Link>
-                                <Link
-                                    to="/admin/jobs/create"
-                                    className="ml-2 text-xs bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-purple-500/20 hover:shadow-md transition-all"
-                                >
-                                    <PlusCircle className="w-3.5 h-3.5" />
-                                    Post Job
-                                </Link>
+                                {canAccessInterviews(user) && (
+                                    <Link
+                                        to="/admin/portal?tab=interviews"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            location.search.includes('tab=interviews')
+                                                ? 'bg-rose-50 text-rose-700 font-bold'
+                                                : 'text-slate-600 hover:text-rose-600 hover:bg-rose-50/50'
+                                        }`}
+                                    >
+                                        <Video className="w-3.5 h-3.5 text-rose-500" />
+                                        Live Interviews
+                                    </Link>
+                                )}
+                                {canManageSubUsers(user) && (
+                                    <Link
+                                        to="/admin/portal?tab=interviewers"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            location.search.includes('tab=interviewers')
+                                                ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                                : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
+                                        }`}
+                                    >
+                                        <Users className="w-3.5 h-3.5 text-indigo-600" />
+                                        Sub-Users & Panel
+                                    </Link>
+                                )}
+                                {canManageCompanies(user) && (
+                                    <Link
+                                        to="/admin/companies"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            isActive('/admin/companies')
+                                                ? 'bg-purple-50 text-[#6A38C2]'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Building2 className="w-3.5 h-3.5" />
+                                        Companies
+                                    </Link>
+                                )}
+                                {(canPostJobs(user) || canViewAllApplicants(user)) && (
+                                    <Link
+                                        to="/admin/jobs"
+                                        className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 ${
+                                            isActive('/admin/jobs') && !isActive('/admin/jobs/create')
+                                                ? 'bg-purple-50 text-[#6A38C2]'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Briefcase className="w-3.5 h-3.5" />
+                                        Jobs & Applicants
+                                    </Link>
+                                )}
+                                {canPostJobs(user) && (
+                                    <Link
+                                        to="/admin/jobs/create"
+                                        className="ml-2 text-xs bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm shadow-purple-500/20 hover:shadow-md transition-all"
+                                    >
+                                        <PlusCircle className="w-3.5 h-3.5" />
+                                        Post Job
+                                    </Link>
+                                )}
                             </>
                         ) : (
                             <>
@@ -302,7 +320,9 @@ const Navbar = () => {
                                         </Avatar>
                                         <div className="text-left hidden lg:block pr-1">
                                             <p className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[110px]">{user?.fullname}</p>
-                                            <p className="text-[10px] text-slate-500 capitalize font-medium">{user?.role}</p>
+                                            <p className="text-[10px] text-slate-500 capitalize font-medium">
+                                                {user?.isSubUser ? (user?.subRole || 'Sub-User') : user?.role}
+                                            </p>
                                         </div>
                                         <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                                     </button>
@@ -319,9 +339,15 @@ const Navbar = () => {
                                             <div className="min-w-0 flex-1">
                                                 <h4 className="font-bold text-sm text-slate-900 truncate">{user?.fullname}</h4>
                                                 <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                                                <span className="inline-block mt-1 text-[10px] px-2 py-0.5 bg-purple-50 text-[#6A38C2] font-bold rounded-full capitalize">
-                                                    {user?.role} Account
-                                                </span>
+                                                {user?.isSubUser ? (
+                                                    <span className="inline-block mt-1 text-[10px] px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 font-bold rounded-full">
+                                                        Sub-User Panelist
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-block mt-1 text-[10px] px-2 py-0.5 bg-purple-50 text-[#6A38C2] font-bold rounded-full capitalize">
+                                                        {user?.role} Account
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 
@@ -364,29 +390,35 @@ const Navbar = () => {
                                                         className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
                                                     >
                                                         <Sparkles className="w-4 h-4 text-purple-600" />
-                                                        <span>Recruiter Command Hub</span>
+                                                        <span>{user.isSubUser ? 'My Workspace' : 'Recruiter Command Hub'}</span>
                                                     </Link>
-                                                    <Link
-                                                        to="/admin/portal?tab=interviews"
-                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-700 rounded-xl transition-colors"
-                                                    >
-                                                        <Video className="w-4 h-4 text-rose-500" />
-                                                        <span>Live Video Interviews</span>
-                                                    </Link>
-                                                    <Link
-                                                        to="/admin/portal?tab=interviewers"
-                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl transition-colors"
-                                                    >
-                                                        <Users className="w-4 h-4 text-indigo-600" />
-                                                        <span>Manage Sub-Users & Panel</span>
-                                                    </Link>
-                                                    <Link
-                                                        to="/admin/jobs/create"
-                                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
-                                                    >
-                                                        <PlusCircle className="w-4 h-4 text-purple-600" />
-                                                        <span>Post New Role</span>
-                                                    </Link>
+                                                    {canAccessInterviews(user) && (
+                                                        <Link
+                                                            to="/admin/portal?tab=interviews"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-700 rounded-xl transition-colors"
+                                                        >
+                                                            <Video className="w-4 h-4 text-rose-500" />
+                                                            <span>Live Video Interviews</span>
+                                                        </Link>
+                                                    )}
+                                                    {canManageSubUsers(user) && (
+                                                        <Link
+                                                            to="/admin/portal?tab=interviewers"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl transition-colors"
+                                                        >
+                                                            <Users className="w-4 h-4 text-indigo-600" />
+                                                            <span>Manage Sub-Users & Panel</span>
+                                                        </Link>
+                                                    )}
+                                                    {canPostJobs(user) && (
+                                                        <Link
+                                                            to="/admin/jobs/create"
+                                                            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-purple-50 hover:text-[#6A38C2] rounded-xl transition-colors"
+                                                        >
+                                                            <PlusCircle className="w-4 h-4 text-purple-600" />
+                                                            <span>Post New Role</span>
+                                                        </Link>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <>
@@ -518,52 +550,62 @@ const Navbar = () => {
                                     }`}
                                 >
                                     <Sparkles className="w-4 h-4 text-[#6A38C2]" />
-                                    <span>Recruiter Command Hub</span>
+                                    <span>{user.isSubUser ? 'My Workspace' : 'Recruiter Command Hub'}</span>
                                 </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviews"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-rose-50/70"
-                                >
-                                    <Video className="w-4 h-4 text-rose-500" />
-                                    <span>Live Video Interviews</span>
-                                </Link>
-                                <Link
-                                    to="/admin/portal?tab=interviewers"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50/70"
-                                >
-                                    <Users className="w-4 h-4 text-indigo-600" />
-                                    <span>Manage Sub-Users & Panel</span>
-                                </Link>
-                                <Link
-                                    to="/admin/companies"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
-                                        isActive('/admin/companies') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Building2 className="w-4 h-4 text-[#6A38C2]" />
-                                    <span>Manage Companies</span>
-                                </Link>
-                                <Link
-                                    to="/admin/jobs"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
-                                        isActive('/admin/jobs') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
-                                    }`}
-                                >
-                                    <Briefcase className="w-4 h-4 text-[#6A38C2]" />
-                                    <span>Jobs & AI Applicants</span>
-                                </Link>
-                                <Link
-                                    to="/admin/jobs/create"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-bold bg-[#6A38C2] text-white shadow-xs"
-                                >
-                                    <PlusCircle className="w-4 h-4" />
-                                    <span>Post a New Job</span>
-                                </Link>
+                                {canAccessInterviews(user) && (
+                                    <Link
+                                        to="/admin/portal?tab=interviews"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-rose-50/70"
+                                    >
+                                        <Video className="w-4 h-4 text-rose-500" />
+                                        <span>Live Video Interviews</span>
+                                    </Link>
+                                )}
+                                {canManageSubUsers(user) && (
+                                    <Link
+                                        to="/admin/portal?tab=interviewers"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50/70"
+                                    >
+                                        <Users className="w-4 h-4 text-indigo-600" />
+                                        <span>Manage Sub-Users & Panel</span>
+                                    </Link>
+                                )}
+                                {canManageCompanies(user) && (
+                                    <Link
+                                        to="/admin/companies"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                            isActive('/admin/companies') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Building2 className="w-4 h-4 text-[#6A38C2]" />
+                                        <span>Manage Companies</span>
+                                    </Link>
+                                )}
+                                {(canPostJobs(user) || canViewAllApplicants(user)) && (
+                                    <Link
+                                        to="/admin/jobs"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold ${
+                                            isActive('/admin/jobs') ? 'bg-purple-50 text-[#6A38C2]' : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <Briefcase className="w-4 h-4 text-[#6A38C2]" />
+                                        <span>Jobs & AI Applicants</span>
+                                    </Link>
+                                )}
+                                {canPostJobs(user) && (
+                                    <Link
+                                        to="/admin/jobs/create"
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-bold bg-[#6A38C2] text-white shadow-xs"
+                                    >
+                                        <PlusCircle className="w-4 h-4" />
+                                        <span>Post a New Job</span>
+                                    </Link>
+                                )}
                             </>
                         ) : (
                             <>

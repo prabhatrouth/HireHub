@@ -1,4 +1,5 @@
 import { Job } from "../models/job.model.js";
+import { User } from "../models/user.model.js";
 import { mockStore } from "../utils/mockStore.js";
 import mongoose from "mongoose";
 
@@ -13,6 +14,23 @@ export const postJob = async (req, res) => {
         if (!title || !description || !requirements || !salary || !location || !jobType || experience === undefined || !position || !companyId) {
             return res.status(400).json({
                 message: "Something is missing.",
+                success: false,
+            });
+        }
+
+        // Sub-user permission check for posting jobs
+        let currentUser = null;
+        if (isDbConnected()) {
+            if (mongoose.Types.ObjectId.isValid(userId)) {
+                currentUser = await User.findById(userId).catch(() => null);
+            }
+        } else {
+            currentUser = mockStore.users.find((u) => String(u._id) === String(userId));
+        }
+
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canPostJobs) {
+            return res.status(403).json({
+                message: "Access Denied: Your account does not have permission to post jobs. Your lead recruiter has restricted job postings for your account.",
                 success: false,
             });
         }
@@ -191,18 +209,42 @@ export const getAdminJobs = async (req, res) => {
     try {
         const adminId = req.id;
 
-        // Check if user is platform administrator
+        // Check if user is platform administrator or sub-user
+        let currentUser = null;
         let isAdminUser = false;
         if (isDbConnected()) {
-            const u = await User.findById(adminId);
-            if (u?.role === "admin") isAdminUser = true;
+            currentUser = await User.findById(adminId).catch(() => null);
+            if (currentUser?.role === "admin") isAdminUser = true;
         } else {
-            const u = mockStore.users.find((u) => String(u._id) === String(adminId));
-            if (u?.role === "admin") isAdminUser = true;
+            currentUser = mockStore.users.find((u) => String(u._id) === String(adminId));
+            if (currentUser?.role === "admin") isAdminUser = true;
         }
 
+        // Sub-user check: if sub-user has neither job posting nor applicant view permission
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canPostJobs && !currentUser?.permissions?.canViewAllApplicants) {
+            return res.status(200).json({
+                jobs: [],
+                success: true,
+                restricted: true,
+                message: "Sub-user account does not have permission to view all jobs.",
+            });
+        }
+
+        const effectiveRecruiterId = currentUser?.isSubUser && currentUser?.parentRecruiter
+            ? currentUser.parentRecruiter
+            : adminId;
+
         if (isDbConnected()) {
-            const query = isAdminUser ? {} : { created_by: adminId };
+            const query = isAdminUser
+                ? {}
+                : {
+                    $or: [
+                        { created_by: adminId },
+                        { created_by: effectiveRecruiterId },
+                        ...(mongoose.Types.ObjectId.isValid(adminId) ? [{ created_by: new mongoose.Types.ObjectId(adminId) }] : []),
+                        ...(mongoose.Types.ObjectId.isValid(effectiveRecruiterId) ? [{ created_by: new mongoose.Types.ObjectId(effectiveRecruiterId) }] : []),
+                    ]
+                };
             const jobs = await Job.find(query)
                 .populate({ path: "company" })
                 .sort({ createdAt: -1 });
@@ -214,7 +256,10 @@ export const getAdminJobs = async (req, res) => {
         } else {
             const adminJobs = mockStore.jobs
                 .filter(
-                    (j) => isAdminUser || String(j.created_by) === String(adminId) || adminId === "recruiter_1"
+                    (j) => isAdminUser ||
+                        String(j.created_by) === String(adminId) ||
+                        String(j.created_by) === String(effectiveRecruiterId) ||
+                        adminId === "recruiter_1"
                 )
                 .map((j) => {
                     let companyObj = j.company;

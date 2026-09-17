@@ -293,6 +293,12 @@ export const updateProfile = async (req, res) => {
                 phoneNumber: user.phoneNumber,
                 role: user.role,
                 profile: user.profile,
+                isSubUser: Boolean(user.isSubUser),
+                parentRecruiter: user.parentRecruiter || null,
+                subRole: user.subRole || "",
+                department: user.department || "",
+                specialty: user.specialty || [],
+                permissions: user.permissions || null,
             };
         }
 
@@ -309,3 +315,55 @@ export const updateProfile = async (req, res) => {
         });
     }
 };
+
+export const getMe = async (req, res) => {
+    try {
+        const userId = req.id;
+        let user = null;
+        if (isDbConnected()) {
+            if (mongoose.Types.ObjectId.isValid(userId)) {
+                user = await User.findById(userId).catch(() => null);
+            }
+        } else {
+            user = mockStore.users.find((u) => String(u._id) === String(userId));
+        }
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found.", success: false });
+        }
+
+        const userPayload = {
+            _id: user._id,
+            fullname: user.fullname,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            role: user.role,
+            profile: user.profile || {},
+            isSubUser: Boolean(user.isSubUser),
+            parentRecruiter: user.parentRecruiter || null,
+            subRole: user.subRole || "",
+            department: user.department || "",
+            specialty: user.specialty || [],
+            permissions: user.permissions || {
+                canViewAssignedInterviews: true,
+                canConductInterview: true,
+                canSubmitReport: true,
+                canViewAllInterviews: false,
+                canPostJobs: false,
+                canViewAllApplicants: false,
+                canManageCompanies: false,
+                canFinalizeHiringDecision: false,
+            },
+            subUsers: user.subUsers || [],
+        };
+
+        return res.status(200).json({
+            user: userPayload,
+            success: true,
+        });
+    } catch (error) {
+        console.error("Get Me Error:", error);
+        return res.status(500).json({ message: "Failed to fetch session user.", success: false });
+    }
+};
+

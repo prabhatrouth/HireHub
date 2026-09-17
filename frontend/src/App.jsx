@@ -93,27 +93,27 @@ const appRouter = createBrowserRouter([
       },
       {
         path: "/admin/companies",
-        element: <ProtectedRoute allowedRoles={['recruiter']}><Companies /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']} requiredPermission="canManageCompanies"><Companies /></ProtectedRoute>
       },
       {
         path: "/admin/companies/create",
-        element: <ProtectedRoute allowedRoles={['recruiter']}><CompanyCreate /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']} requiredPermission="canManageCompanies"><CompanyCreate /></ProtectedRoute>
       },
       {
         path: "/admin/companies/:id",
-        element: <ProtectedRoute allowedRoles={['recruiter']}><CompanySetup /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']} requiredPermission="canManageCompanies"><CompanySetup /></ProtectedRoute>
       },
       {
         path: "/admin/jobs",
-        element: <ProtectedRoute allowedRoles={['recruiter']}><AdminJobs /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']} requiredAnyPermissions={['canPostJobs', 'canViewAllApplicants']}><AdminJobs /></ProtectedRoute>
       },
       {
         path: "/admin/jobs/create",
-        element: <ProtectedRoute allowedRoles={['recruiter']}><PostJob /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']} requiredPermission="canPostJobs"><PostJob /></ProtectedRoute>
       },
       {
         path: "/admin/jobs/:id/applicants",
-        element: <ProtectedRoute allowedRoles={['recruiter']}><Applicants /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['recruiter']} requiredPermission="canViewAllApplicants"><Applicants /></ProtectedRoute>
       },
       {
         path: "/interview/room/:roomId",

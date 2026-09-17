@@ -4,17 +4,20 @@ import Footer from '../shared/Footer';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import AdminJobsTable from './AdminJobsTable';
 import useGetAllAdminJobs from '@/hooks/useGetAllAdminJobs';
 import { setSearchJobByText } from '@/redux/jobSlice';
-import { PlusCircle, Search, Briefcase, Sparkles } from 'lucide-react';
+import { PlusCircle, Search, Briefcase, Sparkles, Shield } from 'lucide-react';
+import { canPostJobs } from '@/utils/permissions';
 
 const AdminJobs = () => {
     useGetAllAdminJobs();
     const [input, setInput] = useState('');
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const { user } = useSelector((store) => store.auth);
+    const allowPost = canPostJobs(user);
 
     useEffect(() => {
         dispatch(setSearchJobByText(input));
@@ -42,13 +45,20 @@ const AdminJobs = () => {
                             </p>
                         </div>
 
-                        <Button
-                            onClick={() => navigate('/admin/jobs/create')}
-                            className="bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-xs"
-                        >
-                            <PlusCircle className="w-4 h-4" />
-                            Post New Job
-                        </Button>
+                        {allowPost ? (
+                            <Button
+                                onClick={() => navigate('/admin/jobs/create')}
+                                className="bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-xs"
+                            >
+                                <PlusCircle className="w-4 h-4" />
+                                Post New Job
+                            </Button>
+                        ) : (
+                            <div className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl font-medium">
+                                <Shield className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Role View Only</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Filter / Search Bar */}

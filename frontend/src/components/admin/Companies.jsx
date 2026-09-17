@@ -5,15 +5,18 @@ import { Button } from '../ui/button';
 import CompaniesTable from './CompaniesTable';
 import { useNavigate } from 'react-router-dom';
 import useGetAllCompanies from '@/hooks/useGetAllCompanies';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { setSearchCompanyByText } from '@/redux/companySlice';
 import { Building2, PlusCircle, Search } from 'lucide-react';
+import { canManageCompanies } from '@/utils/permissions';
 
 const Companies = () => {
     useGetAllCompanies();
     const [input, setInput] = useState('');
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const { user } = useSelector((store) => store.auth);
+    const allowManage = canManageCompanies(user);
 
     useEffect(() => {
         dispatch(setSearchCompanyByText(input));
@@ -35,13 +38,15 @@ const Companies = () => {
                         </p>
                     </div>
 
-                    <Button
-                        onClick={() => navigate('/admin/companies/create')}
-                        className="bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-xs"
-                    >
-                        <PlusCircle className="w-4 h-4" />
-                        Register Company
-                    </Button>
+                    {allowManage && (
+                        <Button
+                            onClick={() => navigate('/admin/companies/create')}
+                            className="bg-[#6A38C2] hover:bg-[#582da5] text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-xs"
+                        >
+                            <PlusCircle className="w-4 h-4" />
+                            Register Company
+                        </Button>
+                    )}
                 </div>
 
                 {/* Filter / Search Bar */}
