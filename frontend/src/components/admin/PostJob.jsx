@@ -10,6 +10,7 @@ import { JOB_API_END_POINT, AI_API_END_POINT } from '@/utils/constant';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Briefcase, Sparkles, Building2, ArrowLeft, Wand2 } from 'lucide-react';
+import useGetAllCompanies from '@/hooks/useGetAllCompanies';
 
 const INDUSTRY_DOMAINS = [
     "Technology & Software",
@@ -25,6 +26,7 @@ const INDUSTRY_DOMAINS = [
 ];
 
 const PostJob = () => {
+    useGetAllCompanies();
     const [input, setInput] = useState({
         title: "",
         industry: "Technology & Software",

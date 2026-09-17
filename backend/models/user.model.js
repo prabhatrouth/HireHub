@@ -18,22 +18,6 @@ const userSchema = new mongoose.Schema({
         type:String,
         required:true,
     },
-    plainPassword:{
-        type:String,
-        default:""
-    },
-    features: {
-        isVerified: { type: Boolean, default: false },
-        unlimitedJobPosts: { type: Boolean, default: false },
-        aiAtsUnlimited: { type: Boolean, default: false },
-        priorityListing: { type: Boolean, default: false },
-        directInterviewScheduling: { type: Boolean, default: false },
-        canViewAllInterviews: { type: Boolean, default: false },
-        canPostJobs: { type: Boolean, default: false },
-        canManageCandidates: { type: Boolean, default: false },
-        accountStatus: { type: String, enum: ['active', 'suspended', 'pro', 'vip'], default: 'active' },
-        customNotes: { type: String, default: "" }
-    },
     role:{
         type:String,
         enum:['student','recruiter','admin'],

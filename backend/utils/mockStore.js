@@ -9,17 +9,7 @@ const mockStudents = [
         email: "amit.student@demo.com",
         phoneNumber: 9000000001,
         password: demoPasswordHash,
-        plainPassword: "Demo@123",
         role: "student",
-        features: {
-            isVerified: true,
-            unlimitedJobPosts: false,
-            aiAtsUnlimited: true,
-            priorityListing: true,
-            directInterviewScheduling: false,
-            accountStatus: "pro",
-            customNotes: "Starred React/TS developer"
-        },
         profile: {
             bio: "Frontend Engineer experienced in React, TypeScript, and accessible UI systems.",
             skills: ["JavaScript", "React", "TypeScript", "HTML", "CSS", "Tailwind"],
@@ -34,17 +24,7 @@ const mockStudents = [
         email: "rahul.student@demo.com",
         phoneNumber: 9000000002,
         password: demoPasswordHash,
-        plainPassword: "Demo@123",
         role: "student",
-        features: {
-            isVerified: false,
-            unlimitedJobPosts: false,
-            aiAtsUnlimited: false,
-            priorityListing: false,
-            directInterviewScheduling: false,
-            accountStatus: "active",
-            customNotes: ""
-        },
         profile: {
             bio: "Financial Analyst and Operations Specialist with expertise in portfolio modeling, valuation, and forecasting.",
             skills: ["Financial Modeling", "Excel", "Valuation", "Risk Analysis", "Accounting", "Data Analysis"],
@@ -59,17 +39,7 @@ const mockStudents = [
         email: "pooja.student@demo.com",
         phoneNumber: 9000000003,
         password: demoPasswordHash,
-        plainPassword: "Demo@123",
         role: "student",
-        features: {
-            isVerified: true,
-            unlimitedJobPosts: false,
-            aiAtsUnlimited: true,
-            priorityListing: false,
-            directInterviewScheduling: false,
-            accountStatus: "vip",
-            customNotes: "Verified clinical operations specialist"
-        },
         profile: {
             bio: "Healthcare Clinical Specialist and Patient Care Coordinator with 3+ years experience in hospital operations.",
             skills: ["Patient Care", "Clinical Operations", "EHR", "Healthcare Quality", "Medical Documentation"],
@@ -87,17 +57,7 @@ const mockRecruiters = [
         email: "rohan.recruiter@demo.com",
         phoneNumber: 9100000001,
         password: demoPasswordHash,
-        plainPassword: "Demo@123",
         role: "recruiter",
-        features: {
-            isVerified: true,
-            unlimitedJobPosts: true,
-            aiAtsUnlimited: true,
-            priorityListing: true,
-            directInterviewScheduling: true,
-            accountStatus: "pro",
-            customNotes: "Head of Global Talent Acquisition"
-        },
         isSubUser: false,
         profile: {
             bio: "Director of Global Talent Acquisition across Technology, Healthcare, Finance, and Marketing.",
@@ -117,17 +77,7 @@ const mockAdmins = [
         email: "admin@hirehub.internal",
         phoneNumber: 9999999999,
         password: demoPasswordHash,
-        plainPassword: "Demo@123",
         role: "admin",
-        features: {
-            isVerified: true,
-            unlimitedJobPosts: true,
-            aiAtsUnlimited: true,
-            priorityListing: true,
-            directInterviewScheduling: true,
-            accountStatus: "vip",
-            customNotes: "Master System Administrator"
-        },
         profile: {
             bio: "Website Administrator with unrestricted global privileges, database diagnostics, and management facilities.",
             skills: ["Database Management", "System Architecture", "Security Auditing"],

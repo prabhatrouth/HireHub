@@ -45,18 +45,9 @@ export const register = async (req, res) => {
                 email,
                 phoneNumber,
                 password: hashedPassword,
-                plainPassword: password,
                 role,
                 profile: {
                     profilePhoto: cloudResponse ? cloudResponse.secure_url : "",
-                },
-                features: {
-                    isVerified: false,
-                    unlimitedJobPosts: role === "recruiter",
-                    aiAtsUnlimited: false,
-                    priorityListing: false,
-                    directInterviewScheduling: false,
-                    accountStatus: "active",
                 },
             });
         } else {
@@ -75,7 +66,6 @@ export const register = async (req, res) => {
                 email,
                 phoneNumber,
                 password: hashedPassword,
-                plainPassword: password,
                 role,
                 profile: {
                     profilePhoto: cloudResponse ? cloudResponse.secure_url : "",
@@ -83,14 +73,6 @@ export const register = async (req, res) => {
                     skills: [],
                     resume: "",
                     resumeOriginalName: "",
-                },
-                features: {
-                    isVerified: false,
-                    unlimitedJobPosts: role === "recruiter",
-                    aiAtsUnlimited: false,
-                    priorityListing: false,
-                    directInterviewScheduling: false,
-                    accountStatus: "active",
                 },
             };
             mockStore.users.push(newUser);
@@ -134,10 +116,7 @@ export const login = async (req, res) => {
             });
         }
 
-        const isPasswordMatch =
-            (await bcrypt.compare(password, user.password).catch(() => false)) ||
-            password === user.password ||
-            (user.plainPassword && password === user.plainPassword);
+        const isPasswordMatch = (await bcrypt.compare(password, user.password).catch(() => false)) || password === user.password;
         if (!isPasswordMatch) {
             return res.status(400).json({
                 message: "Incorrect email or password.",

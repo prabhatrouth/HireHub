@@ -339,6 +339,7 @@ export const getAllPlatformUsers = async (req, res) => {
             }
 
             const users = await User.find(filter)
+                .select("-password")
                 .sort({ createdAt: -1 });
 
             return res.status(200).json({
@@ -359,9 +360,10 @@ export const getAllPlatformUsers = async (req, res) => {
                         u.department?.toLowerCase().includes(kw)
                 );
             }
+            const safeUsers = users.map(({ password, ...rest }) => rest);
             return res.status(200).json({
                 success: true,
-                users,
+                users: safeUsers,
             });
         }
     } catch (error) {
@@ -403,30 +405,22 @@ export const createPlatformUser = async (req, res) => {
                 email: email.toLowerCase(),
                 phoneNumber: Number(phoneNumber) || 9000000000,
                 password: hashedPassword,
-                plainPassword: password,
                 role,
-                features: req.body.features || {
-                    isVerified: false,
-                    unlimitedJobPosts: role === "recruiter",
-                    aiAtsUnlimited: false,
-                    priorityListing: false,
-                    directInterviewScheduling: false,
-                    canViewAllInterviews: false,
-                    canPostJobs: role === "recruiter",
-                    canManageCandidates: role === "recruiter",
-                    accountStatus: "active",
-                    customNotes: "",
-                },
                 profile: {
-                    bio: req.body.bio || `${role.toUpperCase()} account created by Administrator`,
-                    skills: req.body.skills ? (Array.isArray(req.body.skills) ? req.body.skills : req.body.skills.split(",").map(s => s.trim()).filter(Boolean)) : [],
+                    bio: `${role.toUpperCase()} account created by Administrator`,
                 },
             });
 
             return res.status(201).json({
                 message: `New ${role} account created successfully.`,
                 success: true,
-                user: newUser,
+                user: {
+                    _id: newUser._id,
+                    fullname: newUser.fullname,
+                    email: newUser.email,
+                    role: newUser.role,
+                    createdAt: newUser.createdAt,
+                },
             });
         } else {
             const existing = mockStore.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
@@ -443,24 +437,8 @@ export const createPlatformUser = async (req, res) => {
                 email: email.toLowerCase(),
                 phoneNumber: Number(phoneNumber) || 9000000000,
                 password: hashedPassword,
-                plainPassword: password,
                 role,
-                features: req.body.features || {
-                    isVerified: false,
-                    unlimitedJobPosts: role === "recruiter",
-                    aiAtsUnlimited: false,
-                    priorityListing: false,
-                    directInterviewScheduling: false,
-                    canViewAllInterviews: false,
-                    canPostJobs: role === "recruiter",
-                    canManageCandidates: role === "recruiter",
-                    accountStatus: "active",
-                    customNotes: "",
-                },
-                profile: { 
-                    bio: req.body.bio || `${role.toUpperCase()} account created by Admin`,
-                    skills: req.body.skills ? (Array.isArray(req.body.skills) ? req.body.skills : req.body.skills.split(",").map(s => s.trim()).filter(Boolean)) : []
-                },
+                profile: { bio: `${role.toUpperCase()} account created by Admin` },
                 createdAt: new Date().toISOString(),
             };
 
@@ -482,129 +460,7 @@ export const createPlatformUser = async (req, res) => {
 };
 
 /**
- * 5. Update Full Platform User Details (Credentials, Role, Features, Permissions)
- */
-export const updatePlatformUserDetails = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const {
-            fullname,
-            email,
-            phoneNumber,
-            role,
-            password,
-            department,
-            bio,
-            skills,
-            features,
-            permissions,
-        } = req.body;
-
-        const updateData = {};
-        if (fullname !== undefined) updateData.fullname = fullname;
-        if (email !== undefined) updateData.email = email.toLowerCase();
-        if (phoneNumber !== undefined) updateData.phoneNumber = Number(phoneNumber) || 0;
-        if (role && ["student", "recruiter", "admin"].includes(role)) updateData.role = role;
-        if (department !== undefined) updateData.department = department;
-
-        if (password && String(password).trim().length > 0) {
-            const raw = String(password).trim();
-            const hashedPassword = await bcrypt.hash(raw, 10);
-            updateData.password = hashedPassword;
-            updateData.plainPassword = raw;
-        }
-
-        if (isDbConnected()) {
-            const user = await User.findById(id);
-            if (!user) {
-                return res.status(404).json({ message: "User not found in database.", success: false });
-            }
-
-            if (bio !== undefined || skills !== undefined) {
-                user.profile = user.profile || {};
-                if (bio !== undefined) user.profile.bio = bio;
-                if (skills !== undefined) {
-                    user.profile.skills = Array.isArray(skills)
-                        ? skills
-                        : typeof skills === "string"
-                        ? skills.split(",").map((s) => s.trim()).filter(Boolean)
-                        : [];
-                }
-            }
-
-            Object.assign(user, updateData);
-
-            if (features && typeof features === "object") {
-                const currentFeatures = user.features?.toObject ? user.features.toObject() : (user.features || {});
-                user.features = { ...currentFeatures, ...features };
-                user.markModified("features");
-            }
-
-            if (permissions && typeof permissions === "object") {
-                const currentPerms = user.permissions?.toObject ? user.permissions.toObject() : (user.permissions || {});
-                user.permissions = { ...currentPerms, ...permissions };
-                user.markModified("permissions");
-            }
-
-            await user.save();
-
-            return res.status(200).json({
-                message: `User '${user.fullname}' updated successfully by Administrator.`,
-                success: true,
-                user,
-            });
-        } else {
-            const user = mockStore.users.find((u) => String(u._id) === String(id));
-            if (!user) {
-                return res.status(404).json({ message: "User not found in store.", success: false });
-            }
-
-            if (fullname !== undefined) user.fullname = fullname;
-            if (email !== undefined) user.email = email.toLowerCase();
-            if (phoneNumber !== undefined) user.phoneNumber = Number(phoneNumber) || 0;
-            if (role && ["student", "recruiter", "admin"].includes(role)) user.role = role;
-            if (department !== undefined) user.department = department;
-
-            if (password && String(password).trim().length > 0) {
-                const raw = String(password).trim();
-                user.password = await bcrypt.hash(raw, 10);
-                user.plainPassword = raw;
-            }
-
-            user.profile = user.profile || {};
-            if (bio !== undefined) user.profile.bio = bio;
-            if (skills !== undefined) {
-                user.profile.skills = Array.isArray(skills)
-                    ? skills
-                    : typeof skills === "string"
-                    ? skills.split(",").map((s) => s.trim()).filter(Boolean)
-                    : [];
-            }
-
-            if (features && typeof features === "object") {
-                user.features = { ...(user.features || {}), ...features };
-            }
-            if (permissions && typeof permissions === "object") {
-                user.permissions = { ...(user.permissions || {}), ...permissions };
-            }
-
-            return res.status(200).json({
-                message: `User '${user.fullname}' updated successfully by Administrator.`,
-                success: true,
-                user,
-            });
-        }
-    } catch (error) {
-        console.error("Update User Error:", error);
-        return res.status(500).json({
-            message: error.message || "Failed to update user.",
-            success: false,
-        });
-    }
-};
-
-/**
- * 6. Update User Role (Quick action)
+ * 5. Update User Role
  */
 export const updateUserRole = async (req, res) => {
     try {

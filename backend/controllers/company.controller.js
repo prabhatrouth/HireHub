@@ -1,4 +1,5 @@
 import { Company } from "../models/company.model.js";
+import { User } from "../models/user.model.js";
 import getDataUri from "../utils/datauri.js";
 import cloudinary from "../utils/cloudinary.js";
 import { mockStore } from "../utils/mockStore.js";
@@ -9,24 +10,61 @@ const isDbConnected = () => mongoose.connection.readyState === 1;
 export const registerCompany = async (req, res) => {
     try {
         const { companyName } = req.body;
-        if (!companyName) {
+        if (!companyName || !companyName.trim()) {
             return res.status(400).json({
                 message: "Company name is required.",
                 success: false,
             });
         }
 
+        const trimmedName = companyName.trim();
+
         if (isDbConnected()) {
-            let company = await Company.findOne({ name: companyName });
-            if (company) {
+            const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            let existingCompany = await Company.findOne({
+                name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+            });
+
+            if (existingCompany) {
+                // If it already belongs to this user or admin, allow continuing setup smoothly
+                if (String(existingCompany.userId) === String(req.id)) {
+                    return res.status(200).json({
+                        message: "Company already registered by you. Proceeding to setup...",
+                        company: existingCompany,
+                        success: true,
+                    });
+                }
                 return res.status(400).json({
-                    message: "You can't register same company.",
+                    message: `A company named "${trimmedName}" is already registered. Please choose a unique name (e.g. ${trimmedName} Technologies or ${trimmedName} HQ).`,
                     success: false,
                 });
             }
-            company = await Company.create({
-                name: companyName,
-                userId: req.id,
+
+            let validUserId = req.id;
+            if (!mongoose.Types.ObjectId.isValid(validUserId)) {
+                // If user is from mock or custom id, find or fallback to an existing recruiter user id
+                const foundUser = await User.findById(validUserId).catch(() => null);
+                if (!foundUser) {
+                    const fallbackUser = await User.findOne({ role: { $in: ["recruiter", "admin"] } });
+                    validUserId = fallbackUser ? fallbackUser._id : new mongoose.Types.ObjectId();
+                }
+            }
+
+            const company = await Company.create({
+                name: trimmedName,
+                userId: validUserId,
+            });
+
+            // Keep mockStore synced
+            mockStore.companies.push({
+                _id: String(company._id),
+                name: company.name,
+                description: company.description || "",
+                website: company.website || "",
+                location: company.location || "",
+                logo: company.logo || "",
+                userId: String(validUserId),
+                createdAt: company.createdAt || new Date().toISOString(),
             });
 
             return res.status(201).json({
@@ -36,25 +74,32 @@ export const registerCompany = async (req, res) => {
             });
         } else {
             const existing = mockStore.companies.find(
-                (c) => c.name?.toLowerCase() === companyName.toLowerCase()
+                (c) => c.name?.toLowerCase() === trimmedName.toLowerCase()
             );
             if (existing) {
+                if (String(existing.userId) === String(req.id) || req.id === "recruiter_1") {
+                    return res.status(200).json({
+                        message: "Company already registered by you. Proceeding to setup...",
+                        company: existing,
+                        success: true,
+                    });
+                }
                 return res.status(400).json({
-                    message: "You can't register same company.",
+                    message: `A company named "${trimmedName}" already exists. Please choose a unique name.`,
                     success: false,
                 });
             }
             const newCompany = {
                 _id: `company_${Date.now()}`,
-                name: companyName,
+                name: trimmedName,
                 description: "",
                 website: "",
                 location: "",
                 logo: "",
-                userId: req.id,
+                userId: req.id || "recruiter_1",
                 createdAt: new Date().toISOString(),
             };
-            mockStore.companies.push(newCompany);
+            mockStore.companies.unshift(newCompany);
             return res.status(201).json({
                 message: "Company registered successfully.",
                 company: newCompany,
@@ -76,16 +121,27 @@ export const getCompany = async (req, res) => {
 
         let isAdminUser = false;
         if (isDbConnected()) {
-            const u = await User.findById(userId);
-            if (u?.role === "admin") isAdminUser = true;
+            if (mongoose.Types.ObjectId.isValid(userId)) {
+                const u = await User.findById(userId).catch(() => null);
+                if (u?.role === "admin") isAdminUser = true;
+            }
         } else {
             const u = mockStore.users.find((u) => String(u._id) === String(userId));
             if (u?.role === "admin") isAdminUser = true;
         }
 
         if (isDbConnected()) {
-            const query = isAdminUser ? {} : { userId };
-            const companies = await Company.find(query);
+            const query = isAdminUser
+                ? {}
+                : {
+                    $or: [
+                        { userId: userId },
+                        ...(mongoose.Types.ObjectId.isValid(userId)
+                            ? [{ userId: new mongoose.Types.ObjectId(userId) }]
+                            : []),
+                    ],
+                };
+            const companies = await Company.find(query).sort({ createdAt: -1 });
             return res.status(200).json({
                 companies: companies || [],
                 success: true,
@@ -102,7 +158,7 @@ export const getCompany = async (req, res) => {
     } catch (error) {
         console.error("Get Company Error:", error);
         return res.status(200).json({
-            companies: [],
+            companies: mockStore.companies || [],
             success: true,
         });
     }
@@ -113,33 +169,35 @@ export const getCompanyById = async (req, res) => {
     try {
         const companyId = req.params.id;
 
-        if (isDbConnected()) {
+        if (isDbConnected() && mongoose.Types.ObjectId.isValid(companyId)) {
             const company = await Company.findById(companyId);
-            if (!company) {
-                return res.status(404).json({
-                    message: "Company not found.",
-                    success: false,
+            if (company) {
+                return res.status(200).json({
+                    company,
+                    success: true,
                 });
             }
-            return res.status(200).json({
-                company,
-                success: true,
-            });
-        } else {
-            const company = mockStore.companies.find((c) => String(c._id) === String(companyId));
-            if (!company) {
-                return res.status(404).json({
-                    message: "Company not found.",
-                    success: false,
-                });
-            }
+        }
+
+        // Search mockStore or string ID
+        const company = mockStore.companies.find((c) => String(c._id) === String(companyId));
+        if (company) {
             return res.status(200).json({
                 company,
                 success: true,
             });
         }
+
+        return res.status(404).json({
+            message: "Company not found.",
+            success: false,
+        });
     } catch (error) {
         console.error("Get Company By Id Error:", error);
+        const company = mockStore.companies.find((c) => String(c._id) === String(req.params.id));
+        if (company) {
+            return res.status(200).json({ company, success: true });
+        }
         return res.status(404).json({
             message: "Company not found.",
             success: false,
@@ -163,42 +221,47 @@ export const updateCompany = async (req, res) => {
             }
         }
 
-        const updateData = { name, description, website, location };
+        const updateData = {};
+        if (name) updateData.name = name.trim();
+        if (description !== undefined) updateData.description = description;
+        if (website !== undefined) updateData.website = website;
+        if (location !== undefined) updateData.location = location;
         if (logo) updateData.logo = logo;
 
-        if (isDbConnected()) {
+        if (isDbConnected() && mongoose.Types.ObjectId.isValid(req.params.id)) {
             const company = await Company.findByIdAndUpdate(req.params.id, updateData, { new: true });
-            if (!company) {
-                return res.status(404).json({
-                    message: "Company not found.",
-                    success: false,
+            if (company) {
+                const mIdx = mockStore.companies.findIndex((c) => String(c._id) === String(company._id));
+                if (mIdx !== -1) {
+                    mockStore.companies[mIdx] = { ...mockStore.companies[mIdx], ...updateData };
+                }
+                return res.status(200).json({
+                    message: "Company information updated successfully.",
+                    company,
+                    success: true,
                 });
             }
-            return res.status(200).json({
-                message: "Company information updated.",
-                company,
-                success: true,
-            });
-        } else {
-            const company = mockStore.companies.find((c) => String(c._id) === String(req.params.id));
-            if (!company) {
-                return res.status(404).json({
-                    message: "Company not found.",
-                    success: false,
-                });
-            }
-            if (name) company.name = name;
-            if (description) company.description = description;
-            if (website) company.website = website;
-            if (location) company.location = location;
-            if (logo) company.logo = logo;
+        }
+
+        const mockCompany = mockStore.companies.find((c) => String(c._id) === String(req.params.id));
+        if (mockCompany) {
+            if (name) mockCompany.name = name.trim();
+            if (description !== undefined) mockCompany.description = description;
+            if (website !== undefined) mockCompany.website = website;
+            if (location !== undefined) mockCompany.location = location;
+            if (logo) mockCompany.logo = logo;
 
             return res.status(200).json({
-                message: "Company information updated.",
-                company,
+                message: "Company information updated successfully.",
+                company: mockCompany,
                 success: true,
             });
         }
+
+        return res.status(404).json({
+            message: "Company not found.",
+            success: false,
+        });
     } catch (error) {
         console.error("Update Company Error:", error);
         return res.status(500).json({
