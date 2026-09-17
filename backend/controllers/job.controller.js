@@ -230,9 +230,38 @@ export const getAdminJobs = async (req, res) => {
             });
         }
 
-        const parentId = currentUser?.isSubUser
+        let parentId = currentUser?.isSubUser
             ? (currentUser.parentRecruiter?._id || currentUser.parentRecruiter)
             : null;
+
+        // Auto-heal parentId if missing
+        if (currentUser?.isSubUser && !parentId) {
+            if (isDbConnected()) {
+                const parentRecruiterUser = await User.findOne({
+                    $or: [
+                        { "subUsers.userId": currentUser._id },
+                        { "subUsers.email": currentUser.email?.toLowerCase() },
+                    ],
+                });
+                if (parentRecruiterUser) {
+                    parentId = parentRecruiterUser._id;
+                    currentUser.parentRecruiter = parentRecruiterUser._id;
+                    await currentUser.save().catch(() => null);
+                }
+            } else {
+                const parentRecruiterUser = mockStore.users.find((u) =>
+                    u.subUsers?.some(
+                        (s) =>
+                            String(s.userId) === String(adminId) ||
+                            s.email?.toLowerCase() === currentUser.email?.toLowerCase()
+                    )
+                );
+                if (parentRecruiterUser) {
+                    parentId = parentRecruiterUser._id;
+                    currentUser.parentRecruiter = parentRecruiterUser._id;
+                }
+            }
+        }
 
         const effectiveRecruiterId = parentId || adminId;
 
@@ -244,6 +273,11 @@ export const getAdminJobs = async (req, res) => {
             } else if (!currentUser?.isSubUser) {
                 const subUsers = await User.find({ parentRecruiter: adminId }).select("_id");
                 subUsers.forEach((s) => teamUserIds.push(s._id));
+                if (currentUser?.subUsers && currentUser.subUsers.length > 0) {
+                    currentUser.subUsers.forEach((s) => {
+                        if (s.userId) teamUserIds.push(s.userId);
+                    });
+                }
             }
 
             const objectIds = [];

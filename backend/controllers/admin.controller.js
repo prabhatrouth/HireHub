@@ -319,28 +319,52 @@ export const getAdminStats = async (req, res) => {
 };
 
 /**
- * 3. User Management (All Users)
+ * 3. User Management (All Users) - With Administrator Password Visibility & Delegation Details
  */
 export const getAllPlatformUsers = async (req, res) => {
     try {
-        const { role, keyword = "" } = req.query;
+        const { role, keyword = "", isSubUser } = req.query;
 
         if (isDbConnected()) {
             let filter = {};
             if (role && role !== "all") {
                 filter.role = role;
             }
+            if (isSubUser !== undefined) {
+                filter.isSubUser = isSubUser === "true";
+            }
             if (keyword) {
                 filter.$or = [
                     { fullname: { $regex: keyword, $options: "i" } },
                     { email: { $regex: keyword, $options: "i" } },
                     { department: { $regex: keyword, $options: "i" } },
+                    { subRole: { $regex: keyword, $options: "i" } },
                 ];
             }
 
-            const users = await User.find(filter)
-                .select("-password")
+            const rawUsers = await User.find(filter)
+                .populate("parentRecruiter", "fullname email")
                 .sort({ createdAt: -1 });
+
+            // Enhance users with plainPassword/passwordDisplay for administrator visibility
+            const users = rawUsers.map((u) => {
+                const uObj = u.toObject();
+                const plain = uObj.plainPassword || "";
+                let passwordDisplay = plain;
+                if (!passwordDisplay && uObj.password && !uObj.password.startsWith("$2")) {
+                    passwordDisplay = uObj.password;
+                }
+                if (!passwordDisplay && uObj.isSubUser) {
+                    passwordDisplay = "Demo@123";
+                }
+                return {
+                    ...uObj,
+                    password: uObj.password, // Keep bcrypt hash or stored raw password for administrator audit
+                    plainPassword: plain || passwordDisplay || "Demo@123",
+                    passwordDisplay: passwordDisplay || (uObj.password?.startsWith("$2") ? "••••••••" : uObj.password) || "Demo@123",
+                    hasPassword: Boolean(uObj.password),
+                };
+            });
 
             return res.status(200).json({
                 success: true,
@@ -351,25 +375,273 @@ export const getAllPlatformUsers = async (req, res) => {
             if (role && role !== "all") {
                 users = users.filter((u) => u.role === role);
             }
+            if (isSubUser !== undefined) {
+                users = users.filter((u) => Boolean(u.isSubUser) === (isSubUser === "true"));
+            }
             if (keyword) {
                 const kw = keyword.toLowerCase();
                 users = users.filter(
                     (u) =>
                         u.fullname?.toLowerCase().includes(kw) ||
                         u.email?.toLowerCase().includes(kw) ||
-                        u.department?.toLowerCase().includes(kw)
+                        u.department?.toLowerCase().includes(kw) ||
+                        u.subRole?.toLowerCase().includes(kw)
                 );
             }
-            const safeUsers = users.map(({ password, ...rest }) => rest);
+            const formattedUsers = users.map((u) => ({
+                ...u,
+                plainPassword: u.plainPassword || "Demo@123",
+                passwordDisplay: u.plainPassword || "Demo@123",
+                hasPassword: Boolean(u.password),
+            }));
             return res.status(200).json({
                 success: true,
-                users: safeUsers,
+                users: formattedUsers,
             });
         }
     } catch (error) {
         console.error("Get All Users Error:", error);
         return res.status(500).json({
             message: error.message || "Failed to fetch users.",
+            success: false,
+        });
+    }
+};
+
+/**
+ * 3b. Update Platform User as Administrator
+ * Allows Admin to edit any user's profile, contact, role, department, permissions, and password.
+ */
+export const updatePlatformUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            fullname,
+            email,
+            phoneNumber,
+            role,
+            password,
+            department,
+            subRole,
+            permissions,
+            isSubUser,
+            bio,
+        } = req.body;
+
+        if (isDbConnected()) {
+            const user = await User.findById(id);
+            if (!user) {
+                return res.status(404).json({ message: "User not found.", success: false });
+            }
+
+            if (fullname) user.fullname = fullname;
+            if (email) user.email = email.toLowerCase();
+            if (phoneNumber !== undefined) user.phoneNumber = Number(String(phoneNumber).replace(/\D/g, "")) || user.phoneNumber;
+            if (role) user.role = role;
+            if (department !== undefined) user.department = department;
+            if (subRole !== undefined) user.subRole = subRole;
+            if (isSubUser !== undefined) user.isSubUser = Boolean(isSubUser);
+            if (permissions) {
+                user.permissions = {
+                    ...user.permissions,
+                    ...permissions,
+                };
+            }
+            if (bio !== undefined) {
+                if (!user.profile) user.profile = {};
+                user.profile.bio = bio;
+            }
+
+            let newHashed = null;
+            if (password && password.trim()) {
+                newHashed = await bcrypt.hash(password.trim(), 10);
+                user.password = newHashed;
+                user.plainPassword = password.trim();
+            }
+
+            await user.save();
+
+            // If this user is a sub-user of any recruiter, also update the recruiter's subUsers array
+            if (user.isSubUser || user.parentRecruiter) {
+                const parent = (await User.findOne({ "subUsers.userId": user._id })) || (user.parentRecruiter ? await User.findById(user.parentRecruiter) : null);
+                if (parent && parent.subUsers) {
+                    const subIdx = parent.subUsers.findIndex((s) => String(s.userId) === String(user._id) || s.email?.toLowerCase() === user.email.toLowerCase());
+                    if (subIdx !== -1) {
+                        if (fullname) parent.subUsers[subIdx].name = fullname;
+                        if (email) parent.subUsers[subIdx].email = email.toLowerCase();
+                        if (department) parent.subUsers[subIdx].department = department;
+                        if (subRole) parent.subUsers[subIdx].role = subRole;
+                        if (permissions) parent.subUsers[subIdx].permissions = user.permissions;
+                        if (password && password.trim()) parent.subUsers[subIdx].password = password.trim();
+                        await parent.save();
+                    }
+                }
+            }
+
+            return res.status(200).json({
+                message: `User '${user.fullname}' updated successfully by Administrator.`,
+                success: true,
+                user: {
+                    _id: user._id,
+                    fullname: user.fullname,
+                    email: user.email,
+                    phoneNumber: user.phoneNumber,
+                    role: user.role,
+                    subRole: user.subRole,
+                    department: user.department,
+                    isSubUser: user.isSubUser,
+                    permissions: user.permissions,
+                    plainPassword: user.plainPassword,
+                    passwordDisplay: user.plainPassword || (user.password && !user.password.startsWith("$2") ? user.password : "Demo@123"),
+                    createdAt: user.createdAt,
+                    updatedAt: user.updatedAt,
+                },
+            });
+        } else {
+            const user = mockStore.users.find((u) => String(u._id) === String(id));
+            if (!user) {
+                return res.status(404).json({ message: "User not found in mock store.", success: false });
+            }
+
+            if (fullname) user.fullname = fullname;
+            if (email) user.email = email.toLowerCase();
+            if (phoneNumber !== undefined) user.phoneNumber = Number(String(phoneNumber).replace(/\D/g, "")) || user.phoneNumber;
+            if (role) user.role = role;
+            if (department !== undefined) user.department = department;
+            if (subRole !== undefined) user.subRole = subRole;
+            if (isSubUser !== undefined) user.isSubUser = Boolean(isSubUser);
+            if (permissions) user.permissions = { ...user.permissions, ...permissions };
+            if (bio !== undefined) {
+                if (!user.profile) user.profile = {};
+                user.profile.bio = bio;
+            }
+
+            if (password && password.trim()) {
+                user.password = await bcrypt.hash(password.trim(), 10);
+                user.plainPassword = password.trim();
+            }
+
+            // Sync with parent recruiter if subuser
+            for (const r of mockStore.users) {
+                if (r.subUsers) {
+                    const s = r.subUsers.find((sub) => String(sub.userId) === String(id) || sub.email?.toLowerCase() === user.email?.toLowerCase());
+                    if (s) {
+                        if (fullname) s.name = fullname;
+                        if (email) s.email = email.toLowerCase();
+                        if (department) s.department = department;
+                        if (subRole) s.role = subRole;
+                        if (permissions) s.permissions = user.permissions;
+                        if (password && password.trim()) s.password = password.trim();
+                    }
+                }
+            }
+
+            return res.status(200).json({
+                message: `User '${user.fullname}' updated successfully.`,
+                success: true,
+                user: {
+                    ...user,
+                    passwordDisplay: user.plainPassword || "Demo@123",
+                },
+            });
+        }
+    } catch (error) {
+        console.error("Update Platform User Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to update user.",
+            success: false,
+        });
+    }
+};
+
+/**
+ * 3c. Reset Any User Password as Administrator
+ */
+export const resetUserPassword = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { password } = req.body;
+
+        if (!password || !password.trim()) {
+            return res.status(400).json({
+                message: "A new password is required.",
+                success: false,
+            });
+        }
+
+        const newPlainPassword = password.trim();
+        const hashedPassword = await bcrypt.hash(newPlainPassword, 10);
+
+        if (isDbConnected()) {
+            const user = await User.findById(id);
+            if (!user) {
+                return res.status(404).json({ message: "User not found.", success: false });
+            }
+
+            user.password = hashedPassword;
+            user.plainPassword = newPlainPassword;
+            await user.save();
+
+            // Sync with recruiter subUsers
+            const parents = await User.find({ "subUsers.email": user.email });
+            for (const parent of parents) {
+                let updatedSub = false;
+                for (const sub of parent.subUsers) {
+                    if (sub.email?.toLowerCase() === user.email.toLowerCase() || String(sub.userId) === String(user._id)) {
+                        sub.password = newPlainPassword;
+                        updatedSub = true;
+                    }
+                }
+                if (updatedSub) await parent.save();
+            }
+
+            return res.status(200).json({
+                message: `Password for ${user.fullname} (${user.email}) successfully reset to '${newPlainPassword}'.`,
+                success: true,
+                user: {
+                    _id: user._id,
+                    fullname: user.fullname,
+                    email: user.email,
+                    role: user.role,
+                    plainPassword: newPlainPassword,
+                },
+            });
+        } else {
+            const user = mockStore.users.find((u) => String(u._id) === String(id));
+            if (!user) {
+                return res.status(404).json({ message: "User not found in mock store.", success: false });
+            }
+
+            user.password = hashedPassword;
+            user.plainPassword = newPlainPassword;
+
+            // Sync with recruiter's subUsers in mockStore
+            for (const r of mockStore.users) {
+                if (r.subUsers) {
+                    for (const s of r.subUsers) {
+                        if (String(s.userId) === String(id) || s.email?.toLowerCase() === user.email?.toLowerCase()) {
+                            s.password = newPlainPassword;
+                        }
+                    }
+                }
+            }
+
+            return res.status(200).json({
+                message: `Password for ${user.fullname} (${user.email}) successfully reset to '${newPlainPassword}'.`,
+                success: true,
+                user: {
+                    _id: user._id,
+                    fullname: user.fullname,
+                    email: user.email,
+                    role: user.role,
+                    plainPassword: newPlainPassword,
+                },
+            });
+        }
+    } catch (error) {
+        console.error("Reset User Password Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to reset password.",
             success: false,
         });
     }
@@ -680,12 +952,22 @@ export const deletePlatformCompany = async (req, res) => {
 };
 
 /**
- * 11. Get All Applications across platform
+ * 11. Get All Applications across platform (Supports filtering by jobId and status)
  */
 export const getAllPlatformApplications = async (req, res) => {
     try {
+        const { jobId, status, keyword = "" } = req.query;
+
         if (isDbConnected()) {
-            const applications = await Application.find({})
+            let filter = {};
+            if (jobId && jobId !== "all") {
+                filter.job = jobId;
+            }
+            if (status && status !== "all") {
+                filter.status = status.toLowerCase();
+            }
+
+            const applications = await Application.find(filter)
                 .populate("applicant", "fullname email phoneNumber profile")
                 .populate({
                     path: "job",
@@ -698,15 +980,90 @@ export const getAllPlatformApplications = async (req, res) => {
                 applications,
             });
         } else {
+            let applications = [...(mockStore.applications || [])];
+            if (jobId && jobId !== "all") {
+                applications = applications.filter((a) => {
+                    const jId = typeof a.job === "object" ? a.job?._id : a.job;
+                    return String(jId) === String(jobId);
+                });
+            }
+            if (status && status !== "all") {
+                applications = applications.filter((a) => (a.status || "pending").toLowerCase() === status.toLowerCase());
+            }
             return res.status(200).json({
                 success: true,
-                applications: mockStore.applications || [],
+                applications,
             });
         }
     } catch (error) {
         console.error("Get All Applications Error:", error);
         return res.status(500).json({
             message: error.message || "Failed to fetch applications.",
+            success: false,
+        });
+    }
+};
+
+/**
+ * 11b. Get Applicants Specifically for a Given Job
+ * Allows Administrator to inspect all candidates who applied for a specific job.
+ */
+export const getJobApplicantsForAdmin = async (req, res) => {
+    try {
+        const { id } = req.params; // Job ID
+
+        if (isDbConnected()) {
+            const job = await Job.findById(id)
+                .populate("company", "name logo location")
+                .populate("created_by", "fullname email");
+
+            if (!job) {
+                return res.status(404).json({ message: "Job not found.", success: false });
+            }
+
+            const applications = await Application.find({ job: id })
+                .populate("applicant", "fullname email phoneNumber profile")
+                .sort({ createdAt: -1 });
+
+            return res.status(200).json({
+                success: true,
+                job,
+                applications,
+            });
+        } else {
+            const job = (mockStore.jobs || []).find((j) => String(j._id) === String(id));
+            if (!job) {
+                return res.status(404).json({ message: "Job not found.", success: false });
+            }
+
+            let comp = job.company;
+            if (typeof comp === "string") {
+                comp = mockStore.companies.find((c) => String(c._id) === comp) || { name: comp };
+            }
+
+            const applications = (mockStore.applications || [])
+                .filter((a) => {
+                    const jId = typeof a.job === "object" ? a.job?._id : a.job;
+                    return String(jId) === String(id);
+                })
+                .map((a) => {
+                    let applicant = a.applicant;
+                    if (typeof applicant === "string") {
+                        applicant = mockStore.users.find((u) => String(u._id) === applicant) || { fullname: applicant };
+                    }
+                    return { ...a, applicant };
+                });
+
+            return res.status(200).json({
+                success: true,
+                job: { ...job, company: comp },
+                applications,
+            });
+        }
+    } catch (error) {
+        console.error("Get Job Applicants For Admin Error:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to fetch job applicants.",
             success: false,
         });
     }

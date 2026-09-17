@@ -17,7 +17,7 @@ export const registerCompany = async (req, res) => {
             });
         }
 
-        // Check sub-user permission
+        // Check sub-user permission (Allow if either canManageCompanies or canPostJobs is granted)
         let currentUser = null;
         if (isDbConnected()) {
             if (mongoose.Types.ObjectId.isValid(req.id)) {
@@ -27,9 +27,9 @@ export const registerCompany = async (req, res) => {
             currentUser = mockStore.users.find((u) => String(u._id) === String(req.id));
         }
 
-        if (currentUser?.isSubUser && !currentUser?.permissions?.canManageCompanies) {
+        if (currentUser?.isSubUser && !currentUser?.permissions?.canManageCompanies && !currentUser?.permissions?.canPostJobs) {
             return res.status(403).json({
-                message: "Access Denied: Your account does not have permission to register companies. Please contact your lead recruiter to grant 'canManageCompanies' permission.",
+                message: "Access Denied: Your account does not have permission to register companies. Please contact your lead recruiter to grant 'canManageCompanies' or 'canPostJobs' permission.",
                 success: false,
             });
         }
@@ -140,7 +140,7 @@ export const getCompany = async (req, res) => {
         let isAdminUser = false;
         if (isDbConnected()) {
             if (mongoose.Types.ObjectId.isValid(userId)) {
-                currentUser = await User.findById(userId).catch(() => null);
+                currentUser = await User.findById(userId).populate("profile.company").catch(() => null);
                 if (currentUser?.role === "admin") isAdminUser = true;
             }
         } else {
@@ -149,9 +149,40 @@ export const getCompany = async (req, res) => {
         }
 
         // If sub-user, retrieve companies owned by the parent recruiter or team
-        const parentId = currentUser?.isSubUser
+        let parentId = currentUser?.isSubUser
             ? (currentUser.parentRecruiter?._id || currentUser.parentRecruiter)
             : null;
+
+        let parentRecruiterUser = null;
+
+        // Auto-heal: If isSubUser but parentId is not set directly on currentUser, find recruiter who owns this sub-user
+        if (currentUser?.isSubUser && !parentId) {
+            if (isDbConnected()) {
+                parentRecruiterUser = await User.findOne({
+                    $or: [
+                        { "subUsers.userId": currentUser._id },
+                        { "subUsers.email": currentUser.email?.toLowerCase() },
+                    ],
+                });
+                if (parentRecruiterUser) {
+                    parentId = parentRecruiterUser._id;
+                    currentUser.parentRecruiter = parentRecruiterUser._id;
+                    await currentUser.save().catch(() => null);
+                }
+            } else {
+                parentRecruiterUser = mockStore.users.find((u) =>
+                    u.subUsers?.some(
+                        (s) =>
+                            String(s.userId) === String(userId) ||
+                            s.email?.toLowerCase() === currentUser.email?.toLowerCase()
+                    )
+                );
+                if (parentRecruiterUser) {
+                    parentId = parentRecruiterUser._id;
+                    currentUser.parentRecruiter = parentRecruiterUser._id;
+                }
+            }
+        }
 
         const effectiveRecruiterId = parentId || userId;
 
@@ -163,6 +194,11 @@ export const getCompany = async (req, res) => {
             } else if (!currentUser?.isSubUser) {
                 const subUsers = await User.find({ parentRecruiter: userId }).select("_id");
                 subUsers.forEach((s) => teamUserIds.push(s._id));
+                if (currentUser?.subUsers && currentUser.subUsers.length > 0) {
+                    currentUser.subUsers.forEach((s) => {
+                        if (s.userId) teamUserIds.push(s.userId);
+                    });
+                }
             }
 
             const objectIds = [];
@@ -175,15 +211,47 @@ export const getCompany = async (req, res) => {
                 }
             });
 
-            const query = isAdminUser
-                ? {}
-                : {
+            // Also check profile.company of user and parent
+            const profileCompanyIds = [];
+            if (currentUser?.profile?.company) {
+                profileCompanyIds.push(currentUser.profile.company._id || currentUser.profile.company);
+            }
+            if (parentRecruiterUser?.profile?.company) {
+                profileCompanyIds.push(parentRecruiterUser.profile.company._id || parentRecruiterUser.profile.company);
+            }
+
+            const profileCompanyObjectIds = [];
+            profileCompanyIds.forEach((cId) => {
+                if (cId && mongoose.Types.ObjectId.isValid(cId)) {
+                    profileCompanyObjectIds.push(new mongoose.Types.ObjectId(cId));
+                }
+            });
+
+            const orConditions = [
+                { userId: { $in: objectIds } },
+                { userId: { $in: stringIds } },
+            ];
+
+            if (profileCompanyObjectIds.length > 0) {
+                orConditions.push({ _id: { $in: profileCompanyObjectIds } });
+            }
+
+            const query = isAdminUser ? {} : { $or: orConditions };
+            let companies = await Company.find(query).sort({ createdAt: -1 });
+
+            // If still no company found and this is a sub-user, check if any companies belong to the parent recruiter or team
+            if ((!companies || companies.length === 0) && currentUser?.isSubUser) {
+                const fallbackCompanies = await Company.find({
                     $or: [
-                        { userId: { $in: objectIds } },
-                        { userId: { $in: stringIds } },
+                        { userId: effectiveRecruiterId },
+                        { userId: String(effectiveRecruiterId) },
                     ],
-                };
-            const companies = await Company.find(query).sort({ createdAt: -1 });
+                });
+                if (fallbackCompanies && fallbackCompanies.length > 0) {
+                    companies = fallbackCompanies;
+                }
+            }
+
             return res.status(200).json({
                 companies: companies || [],
                 success: true,
@@ -198,15 +266,25 @@ export const getCompany = async (req, res) => {
                 mockStore.users
                     .filter((u) => String(u.parentRecruiter) === String(userId))
                     .forEach((u) => teamIds.push(String(u._id)));
+                currentUser?.subUsers?.forEach((s) => {
+                    if (s.userId) teamIds.push(String(s.userId));
+                });
             }
 
-            const userCompanies = mockStore.companies.filter(
-                (c) => isAdminUser ||
+            let userCompanies = mockStore.companies.filter(
+                (c) =>
+                    isAdminUser ||
                     teamIds.includes(String(c.userId)) ||
                     userId === "recruiter_1" ||
                     (currentUser?.isSubUser && String(c.userId) === "recruiter_1") ||
                     String(effectiveRecruiterId) === "recruiter_1"
             );
+
+            // Sub-users with job posting should never be stranded without access to demo companies
+            if (userCompanies.length === 0 && currentUser?.isSubUser) {
+                userCompanies = mockStore.companies;
+            }
+
             return res.status(200).json({
                 companies: userCompanies,
                 success: true,

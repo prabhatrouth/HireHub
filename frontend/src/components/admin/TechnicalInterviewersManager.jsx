@@ -74,6 +74,7 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showEditPassword, setShowEditPassword] = useState(false);
+    const [showPasswordCardMap, setShowPasswordCardMap] = useState({});
     const [credentialsModal, setCredentialsModal] = useState(null);
 
     const [form, setForm] = useState({
@@ -157,6 +158,15 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
         }));
     };
 
+    const generateRandomPassword = () => {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+        let pwd = "";
+        for (let i = 0; i < 10; i++) {
+            pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return pwd;
+    };
+
     const handleOpenEdit = (interviewer) => {
         const perms = interviewer.permissions || {};
         const specStr = Array.isArray(interviewer.specialty)
@@ -168,6 +178,7 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
             name: interviewer.name || '',
             email: interviewer.email || '',
             password: '',
+            currentPassword: interviewer.password || 'Demo@123',
             role: interviewer.role || 'Technical Interviewer',
             department: interviewer.department || 'Engineering Core',
             specialty: specStr,
@@ -449,12 +460,32 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
                                                 Copy
                                             </button>
                                         </div>
-                                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
-                                            <span className="flex items-center gap-1">
-                                                <Key className="w-3 h-3 text-purple-500" />
-                                                Login: <span className="font-mono font-semibold text-slate-700">Demo@123</span>
-                                            </span>
-                                            <Badge variant="outline" className="text-[10px] bg-white text-purple-700 border-purple-200">
+                                        <div className="flex items-center justify-between text-[11px] text-slate-600 pt-2 border-t border-slate-200/60">
+                                            <div className="flex items-center gap-1.5 overflow-hidden">
+                                                <Key className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                                <span className="text-slate-500 shrink-0 font-medium">Password:</span>
+                                                <span className="font-mono font-bold text-slate-800 tracking-wider">
+                                                    {showPasswordCardMap[interviewer._id]
+                                                        ? (interviewer.password || 'Demo@123')
+                                                        : '••••••••'}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPasswordCardMap((prev) => ({ ...prev, [interviewer._id]: !prev[interviewer._id] }))}
+                                                    className="text-slate-400 hover:text-purple-600 p-0.5 ml-0.5 rounded transition-colors"
+                                                    title={showPasswordCardMap[interviewer._id] ? "Hide password" : "Show password"}
+                                                >
+                                                    {showPasswordCardMap[interviewer._id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => copyText(interviewer.password || 'Demo@123', 'Password')}
+                                                    className="text-purple-600 hover:text-purple-800 text-[10px] font-bold hover:underline shrink-0 ml-1"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] bg-white text-purple-700 border-purple-200 shrink-0 ml-2">
                                                 Sub-User Account
                                             </Badge>
                                         </div>
@@ -558,7 +589,16 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
                             </div>
 
                             <div>
-                                <Label className="text-xs font-bold text-slate-700">Initial Password</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-bold text-slate-700">Initial Password</Label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setForm({ ...form, password: generateRandomPassword() })}
+                                        className="text-[11px] font-semibold text-purple-600 hover:text-purple-800"
+                                    >
+                                        Auto-Generate
+                                    </button>
+                                </div>
                                 <div className="relative mt-1">
                                     <Input
                                         type={showPassword ? 'text' : 'password'}
@@ -730,6 +770,26 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
                             />
                         </div>
 
+                        {/* Current Password Banner in Edit Modal */}
+                        {editForm.currentPassword && (
+                            <div className="p-3 bg-purple-50/80 border border-purple-100 rounded-xl flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
+                                    <Key className="w-4 h-4 text-purple-600" />
+                                    <span className="text-slate-600">Current Login Password:</span>
+                                    <code className="font-mono font-bold text-purple-900 bg-white px-2 py-0.5 rounded border border-purple-200">
+                                        {editForm.currentPassword}
+                                    </code>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => copyText(editForm.currentPassword, 'Password')}
+                                    className="text-purple-700 hover:text-purple-900 font-bold hover:underline"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <Label className="text-xs font-bold text-slate-700">Work Email (Login ID) *</Label>
@@ -744,11 +804,20 @@ const TechnicalInterviewersManager = ({ onSelectInterviewer, isSelectionMode = f
                             </div>
 
                             <div>
-                                <Label className="text-xs font-bold text-slate-700">New Password (Leave blank to keep)</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-bold text-slate-700">New Password (Optional)</Label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditForm({ ...editForm, password: generateRandomPassword() })}
+                                        className="text-[11px] font-semibold text-purple-600 hover:text-purple-800"
+                                    >
+                                        Auto-Generate
+                                    </button>
+                                </div>
                                 <div className="relative mt-1">
                                     <Input
                                         type={showEditPassword ? 'text' : 'password'}
-                                        placeholder="Optional new password"
+                                        placeholder="Leave blank to keep current"
                                         value={editForm.password}
                                         onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                                         className="h-10 rounded-xl border-slate-200 text-sm pr-9"

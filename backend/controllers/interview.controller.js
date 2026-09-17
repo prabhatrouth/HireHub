@@ -863,9 +863,34 @@ export const getSubUsers = async (req, res) => {
                 });
             }
 
+            const formattedSubUsers = await Promise.all(
+                (recruiter.subUsers || []).map(async (u) => {
+                    const subDoc = u.toObject ? u.toObject() : { ...u };
+                    let clearPassword = subDoc.password;
+
+                    // If subDoc.password is missing, undefined, or a bcrypt hash, fetch the plainPassword
+                    const isBcrypt = clearPassword && (clearPassword.startsWith("$2a$") || clearPassword.startsWith("$2b$"));
+                    if (!clearPassword || isBcrypt) {
+                        const standalone = await User.findOne({
+                            $or: [{ _id: subDoc.userId }, { email: subDoc.email?.toLowerCase() }],
+                        }).select("plainPassword");
+                        if (standalone?.plainPassword) {
+                            clearPassword = standalone.plainPassword;
+                        } else {
+                            clearPassword = "Demo@123";
+                        }
+                    }
+
+                    return {
+                        ...subDoc,
+                        password: clearPassword,
+                    };
+                })
+            );
+
             return res.status(200).json({
                 success: true,
-                subUsers: recruiter.subUsers || [],
+                subUsers: formattedSubUsers,
             });
         } else {
             const recruiter = mockStore.users.find((u) => String(u._id) === String(recruiterId)) || mockStore.users[2];
@@ -875,9 +900,22 @@ export const getSubUsers = async (req, res) => {
                     success: false,
                 });
             }
+            const formattedSubUsers = (recruiter?.subUsers || []).map((u) => {
+                let clearPassword = u.password;
+                if (!clearPassword || clearPassword.startsWith("$2a$") || clearPassword.startsWith("$2b$")) {
+                    const standalone = mockStore.users.find(
+                        (mu) => String(mu._id) === String(u.userId) || mu.email?.toLowerCase() === u.email?.toLowerCase()
+                    );
+                    clearPassword = standalone?.plainPassword || "Demo@123";
+                }
+                return {
+                    ...u,
+                    password: clearPassword || "Demo@123",
+                };
+            });
             return res.status(200).json({
                 success: true,
-                subUsers: recruiter?.subUsers || [],
+                subUsers: formattedSubUsers,
             });
         }
     } catch (error) {
@@ -951,6 +989,7 @@ export const addSubUser = async (req, res) => {
                     department,
                     specialty: Array.isArray(specialty) ? specialty : [specialty],
                     permissions: effectivePermissions,
+                    plainPassword: password || "Demo@123",
                     profile: {
                         bio: `${role} - ${department}`,
                         skills: Array.isArray(specialty) ? specialty : [specialty],
@@ -966,6 +1005,10 @@ export const addSubUser = async (req, res) => {
                 subUserAccount.department = department;
                 subUserAccount.specialty = Array.isArray(specialty) ? specialty : [specialty];
                 subUserAccount.permissions = effectivePermissions;
+                if (password && password.trim()) {
+                    subUserAccount.password = hashedPassword;
+                    subUserAccount.plainPassword = password.trim();
+                }
                 await subUserAccount.save();
             }
 
@@ -1031,6 +1074,7 @@ export const addSubUser = async (req, res) => {
                 email: email.toLowerCase(),
                 phoneNumber: 9100000099,
                 password: hashedPassword,
+                plainPassword: password || "Demo@123",
                 role: "recruiter",
                 isSubUser: true,
                 parentRecruiter: recruiterId,
@@ -1148,7 +1192,10 @@ export const updateSubUser = async (req, res) => {
                 if (department) standaloneUser.department = department;
                 if (specialty !== undefined) standaloneUser.specialty = parsedSpecialty;
                 if (permissions) standaloneUser.permissions = effectivePermissions;
-                if (hashedPassword) standaloneUser.password = hashedPassword;
+                if (hashedPassword) {
+                    standaloneUser.password = hashedPassword;
+                    standaloneUser.plainPassword = password.trim();
+                }
                 await standaloneUser.save();
             }
 
@@ -1209,6 +1256,7 @@ export const updateSubUser = async (req, res) => {
                 if (permissions) mockStandalone.permissions = effectivePermissions;
                 if (password) {
                     mockStandalone.password = await bcrypt.hash(password, 10);
+                    mockStandalone.plainPassword = password.trim();
                 }
             }
 

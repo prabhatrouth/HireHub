@@ -42,9 +42,10 @@ export const register = async (req, res) => {
             const hashedPassword = await bcrypt.hash(password, 10);
             await User.create({
                 fullname,
-                email,
+                email: email.toLowerCase(),
                 phoneNumber,
                 password: hashedPassword,
+                plainPassword: password,
                 role,
                 profile: {
                     profilePhoto: cloudResponse ? cloudResponse.secure_url : "",
@@ -52,7 +53,7 @@ export const register = async (req, res) => {
             });
         } else {
             // Fallback in-memory store
-            const existing = mockStore.users.find((u) => u.email === email);
+            const existing = mockStore.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
             if (existing) {
                 return res.status(400).json({
                     message: "User already exists with this email.",
@@ -63,9 +64,10 @@ export const register = async (req, res) => {
             const newUser = {
                 _id: `user_${Date.now()}`,
                 fullname,
-                email,
+                email: email.toLowerCase(),
                 phoneNumber,
                 password: hashedPassword,
+                plainPassword: password,
                 role,
                 profile: {
                     profilePhoto: cloudResponse ? cloudResponse.secure_url : "",
@@ -102,11 +104,64 @@ export const login = async (req, res) => {
             });
         }
 
+        const normalizedEmail = email.trim().toLowerCase();
         let user = null;
         if (isDbConnected()) {
-            user = await User.findOne({ email });
+            user = await User.findOne({ email: { $regex: new RegExp(`^${normalizedEmail}$`, "i") } });
+
+            // If user not found at root, check if registered as a sub-user under any recruiter
+            if (!user) {
+                const parent = await User.findOne({ "subUsers.email": { $regex: new RegExp(`^${normalizedEmail}$`, "i") } });
+                if (parent && parent.subUsers) {
+                    const sub = parent.subUsers.find((s) => s.email?.toLowerCase() === normalizedEmail);
+                    if (sub) {
+                        const hashed = await bcrypt.hash(sub.password || "Demo@123", 10);
+                        user = await User.create({
+                            fullname: sub.name,
+                            email: sub.email.toLowerCase(),
+                            phoneNumber: Number((sub.phone || "").replace(/\D/g, "")) || 9100000099,
+                            password: hashed,
+                            plainPassword: sub.password || "Demo@123",
+                            role: "recruiter",
+                            isSubUser: true,
+                            parentRecruiter: parent._id,
+                            subRole: sub.role || "Technical Interviewer",
+                            department: sub.department || "Engineering",
+                            specialty: sub.specialty || [],
+                            permissions: sub.permissions,
+                        });
+                    }
+                }
+            }
         } else {
-            user = mockStore.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+            user = mockStore.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+            if (!user) {
+                // Check in recruiter subUsers in mockStore
+                for (const u of mockStore.users) {
+                    const sub = u.subUsers?.find((s) => s.email?.toLowerCase() === normalizedEmail);
+                    if (sub) {
+                        const hashed = await bcrypt.hash(sub.password || "Demo@123", 10);
+                        user = {
+                            _id: sub.userId || `subuser_${Date.now()}_user`,
+                            fullname: sub.name,
+                            email: sub.email.toLowerCase(),
+                            phoneNumber: 9100000099,
+                            password: hashed,
+                            plainPassword: sub.password || "Demo@123",
+                            role: "recruiter",
+                            isSubUser: true,
+                            parentRecruiter: u._id,
+                            subRole: sub.role,
+                            department: sub.department,
+                            specialty: sub.specialty || [],
+                            permissions: sub.permissions,
+                            profile: { bio: `${sub.role} - ${sub.department}` },
+                        };
+                        mockStore.users.push(user);
+                        break;
+                    }
+                }
+            }
         }
 
         if (!user) {

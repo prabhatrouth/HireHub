@@ -4,9 +4,12 @@ import {
     getAdminStats,
     getAllPlatformUsers,
     createPlatformUser,
+    updatePlatformUser,
+    resetUserPassword,
     updateUserRole,
     deletePlatformUser,
     getAllPlatformJobs,
+    getJobApplicantsForAdmin,
     deletePlatformJob,
     getAllPlatformCompanies,
     deletePlatformCompany,
@@ -29,11 +32,14 @@ router.get("/stats", isAuthenticated, isAdmin, getAdminStats);
 // User Management
 router.get("/users", isAuthenticated, isAdmin, getAllPlatformUsers);
 router.post("/users", isAuthenticated, isAdmin, createPlatformUser);
+router.put("/users/:id", isAuthenticated, isAdmin, updatePlatformUser);
+router.put("/users/:id/password", isAuthenticated, isAdmin, resetUserPassword);
 router.put("/users/:id/role", isAuthenticated, isAdmin, updateUserRole);
 router.delete("/users/:id", isAuthenticated, isAdmin, deletePlatformUser);
 
 // Job Management
 router.get("/jobs", isAuthenticated, isAdmin, getAllPlatformJobs);
+router.get("/jobs/:id/applicants", isAuthenticated, isAdmin, getJobApplicantsForAdmin);
 router.delete("/jobs/:id", isAuthenticated, isAdmin, deletePlatformJob);
 
 // Company Management

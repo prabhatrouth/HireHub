@@ -9,6 +9,7 @@ const mockStudents = [
         email: "amit.student@demo.com",
         phoneNumber: 9000000001,
         password: demoPasswordHash,
+        plainPassword: "Demo@123",
         role: "student",
         profile: {
             bio: "Frontend Engineer experienced in React, TypeScript, and accessible UI systems.",
@@ -24,6 +25,7 @@ const mockStudents = [
         email: "rahul.student@demo.com",
         phoneNumber: 9000000002,
         password: demoPasswordHash,
+        plainPassword: "Demo@123",
         role: "student",
         profile: {
             bio: "Financial Analyst and Operations Specialist with expertise in portfolio modeling, valuation, and forecasting.",
@@ -39,6 +41,7 @@ const mockStudents = [
         email: "pooja.student@demo.com",
         phoneNumber: 9000000003,
         password: demoPasswordHash,
+        plainPassword: "Demo@123",
         role: "student",
         profile: {
             bio: "Healthcare Clinical Specialist and Patient Care Coordinator with 3+ years experience in hospital operations.",
@@ -57,6 +60,7 @@ const mockRecruiters = [
         email: "rohan.recruiter@demo.com",
         phoneNumber: 9100000001,
         password: demoPasswordHash,
+        plainPassword: "Demo@123",
         role: "recruiter",
         isSubUser: false,
         profile: {
@@ -97,6 +101,7 @@ const mockRecruiters = [
         email: "maya.chen@demo.com",
         phoneNumber: 9100000088,
         password: demoPasswordHash,
+        plainPassword: "Demo@123",
         role: "recruiter",
         isSubUser: true,
         parentRecruiter: "recruiter_1",
@@ -131,6 +136,7 @@ const mockAdmins = [
         email: "admin@hirehub.internal",
         phoneNumber: 9999999999,
         password: demoPasswordHash,
+        plainPassword: "Demo@123",
         role: "admin",
         profile: {
             bio: "Website Administrator with unrestricted global privileges, database diagnostics, and management facilities.",
