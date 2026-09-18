@@ -1,5 +1,5 @@
 import express from "express";
-import isAuthenticated from "../middlewares/isAuthenticated.js";
+import { isAuthenticated, optionalAuth } from "../middlewares/isAuthenticated.js";
 import {
     scheduleInterview,
     getMyInterviews,
@@ -28,11 +28,11 @@ router.route("/my-interviews").get(isAuthenticated, getMyInterviews);
 router.route("/sub-users").get(isAuthenticated, getSubUsers).post(isAuthenticated, addSubUser);
 router.route("/sub-users/:subUserId").put(isAuthenticated, updateSubUser).delete(isAuthenticated, deleteSubUser);
 
-// Interview room & lifecycle
-router.route("/room/:roomId").get(isAuthenticated, getInterviewRoom);
-router.route("/room/:roomId/status").post(isAuthenticated, updateInterviewStatus);
-router.route("/room/:roomId/workspace").post(isAuthenticated, updateRoomWorkspace);
-router.route("/room/:roomId/run-code").post(isAuthenticated, executeCodeRunner);
+// Interview room & lifecycle - use optionalAuth so meeting links work across tabs and sessions
+router.route("/room/:roomId").get(optionalAuth, getInterviewRoom);
+router.route("/room/:roomId/status").post(optionalAuth, updateInterviewStatus);
+router.route("/room/:roomId/workspace").post(optionalAuth, updateRoomWorkspace);
+router.route("/room/:roomId/run-code").post(optionalAuth, executeCodeRunner);
 router.route("/room/:roomId/evaluate").post(isAuthenticated, submitEvaluation);
 router.route("/room/:roomId/finalize-decision").post(isAuthenticated, finalizeRecruiterDecision);
 router.route("/room/:roomId/inspection").post(isAuthenticated, logRecruiterInspection);

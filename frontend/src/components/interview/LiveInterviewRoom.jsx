@@ -157,6 +157,7 @@ const LiveInterviewRoom = () => {
     const virtualStreamStopRef = useRef(null);
     const simulatedStreamRef = useRef(null);
     const simulatedStopRef = useRef(null);
+    const simulatedScreenStreamRef = useRef(null);
     const [isSimulatedPartnerActive, setIsSimulatedPartnerActive] = useState(false);
     const [audioBlockedByBrowser, setAudioBlockedByBrowser] = useState(false);
 
@@ -298,12 +299,12 @@ const LiveInterviewRoom = () => {
         canvas.width = 640;
         canvas.height = 480;
         canvas.style.position = 'fixed';
-        canvas.style.left = '-9999px';
-        canvas.style.top = '-9999px';
-        canvas.style.width = '1px';
-        canvas.style.height = '1px';
-        canvas.style.opacity = '0';
+        canvas.style.left = '-10000px';
+        canvas.style.top = '0';
+        canvas.style.width = '640px';
+        canvas.style.height = '480px';
         canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = '-999';
         if (document.body) {
             document.body.appendChild(canvas);
         }
@@ -312,6 +313,7 @@ const LiveInterviewRoom = () => {
         let frame = 0;
         let animId;
         let intervalId;
+        let vTrack = null;
 
         const draw = () => {
             frame++;
@@ -362,25 +364,37 @@ const LiveInterviewRoom = () => {
             // Live indicator badge
             ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
             ctx.beginPath();
-            ctx.roundRect ? ctx.roundRect(20, 20, 80, 26, 6) : ctx.rect(20, 20, 80, 26);
+            if (ctx.roundRect) ctx.roundRect(20, 20, 80, 26, 6);
+            else ctx.rect(20, 20, 80, 26);
             ctx.fill();
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 12px sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText('● LIVE CAM', 28, 37);
+
+            // Live clock stamp
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'right';
+            ctx.fillText(new Date().toLocaleTimeString(), 620, 37);
+
+            if (vTrack && vTrack.requestFrame) {
+                try { vTrack.requestFrame(); } catch (e) { /* ignore */ }
+            }
         };
 
         draw();
 
-        // Run both animationFrame and interval so frames are produced continuously even if tab is unfocused
+        // Run both animationFrame and interval so frames are produced continuously
         const loop = () => {
             draw();
             animId = requestAnimationFrame(loop);
         };
         animId = requestAnimationFrame(loop);
-        intervalId = setInterval(draw, 50);
+        intervalId = setInterval(draw, 40);
 
-        const stream = canvas.captureStream(25);
+        const stream = canvas.captureStream(30);
+        vTrack = stream.getVideoTracks()[0];
 
         // Add an oscillator audio track so SDP includes audio m-line
         try {
@@ -403,11 +417,14 @@ const LiveInterviewRoom = () => {
             console.debug('Audio context fallback notice:', e);
         }
 
-        virtualStreamStopRef.current = () => {
+        const cleanup = () => {
             if (animId) cancelAnimationFrame(animId);
             if (intervalId) clearInterval(intervalId);
             if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
         };
+
+        stream._cleanup = cleanup;
+        virtualStreamStopRef.current = cleanup;
 
         return stream;
     };
@@ -600,40 +617,114 @@ const LiveInterviewRoom = () => {
             setMediaError('');
 
             if (!forceVirtual && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                let stream;
+                let stream = null;
+
+                // Tier 1: Try requested video & audio with ideal resolution
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({
-                        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                        video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
+                        audio: wantAudio ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
                     });
-                } catch (firstErr) {
-                    console.warn('High-res media stream error, retrying standard constraints:', firstErr?.message);
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: true,
-                    });
+                } catch (e1) {
+                    console.warn('Tier 1 media request notice:', e1?.message);
                 }
 
-                // Explicitly sync track enabled states to user preferences
-                const videoTrack = stream.getVideoTracks()[0];
-                const audioTrack = stream.getAudioTracks()[0];
-                if (videoTrack) videoTrack.enabled = wantVideo;
-                if (audioTrack) audioTrack.enabled = wantAudio;
-
-                localStreamRef.current = stream;
-                setIsUsingVirtualCam(false);
-                setIsVideoOn(wantVideo);
-                setIsMicOn(wantAudio);
-
-                if (localVideoRef.current) {
-                    localVideoRef.current.srcObject = stream;
-                    localVideoRef.current.play().catch((e) => console.debug('Local play error:', e));
+                // Tier 2: Try basic boolean constraints
+                if (!stream && (wantVideo || wantAudio)) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: wantVideo,
+                            audio: wantAudio,
+                        });
+                    } catch (e2) {
+                        console.warn('Tier 2 media request notice:', e2?.message);
+                    }
                 }
-                toast.success('Physical Camera & Microphone connected successfully.');
-                return stream;
-            } else {
-                throw new Error('Using Virtual HD Stream');
+
+                // Tier 3: Try video-only (for machines/laptops without microphone)
+                if (!stream && wantVideo) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    } catch (e3) {
+                        console.warn('Tier 3 video-only media request notice:', e3?.message);
+                    }
+                }
+
+                // Tier 4: Try audio-only (for devices without webcam)
+                if (!stream && wantAudio) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                    } catch (e4) {
+                        console.warn('Tier 4 audio-only media request notice:', e4?.message);
+                    }
+                }
+
+                if (stream) {
+                    // If video track is missing (e.g. microphone-only device), add virtual video track
+                    if (!stream.getVideoTracks().length && wantVideo) {
+                        const vStream = createVirtualStream(user?.fullname || 'Participant', isRecruiter ? 'Interviewer' : 'Candidate');
+                        const vTrack = vStream.getVideoTracks()[0];
+                        if (vTrack) stream.addTrack(vTrack);
+                        setIsUsingVirtualCam(true);
+                    } else {
+                        setIsUsingVirtualCam(false);
+                    }
+
+                    // If audio track is missing, synthesize silent audio track for WebRTC m-line compliance
+                    if (!stream.getAudioTracks().length) {
+                        try {
+                            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                            if (AudioContextClass) {
+                                const audioCtx = new AudioContextClass();
+                                const dest = audioCtx.createMediaStreamDestination();
+                                dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+                            }
+                        } catch (aErr) {
+                            console.debug('Audio filler notice:', aErr);
+                        }
+                    }
+
+                    const videoTrack = stream.getVideoTracks()[0];
+                    const audioTrack = stream.getAudioTracks()[0];
+                    if (videoTrack) videoTrack.enabled = wantVideo;
+                    if (audioTrack) audioTrack.enabled = wantAudio;
+
+                    localStreamRef.current = stream;
+                    setIsVideoOn(wantVideo);
+                    setIsMicOn(wantAudio);
+
+                    // Synchronize active WebRTC peer connection senders
+                    if (peerConnectionRef.current) {
+                        if (videoTrack) {
+                            let vSender = peerConnectionRef.current.getSenders().find((s) => s.track?.kind === 'video');
+                            if (!vSender) vSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
+                            if (vSender) vSender.replaceTrack(videoTrack).catch(console.debug);
+                            else peerConnectionRef.current.addTrack(videoTrack, stream);
+                        }
+                        if (audioTrack) {
+                            let aSender = peerConnectionRef.current.getSenders().find((s) => s.track?.kind === 'audio');
+                            if (!aSender) aSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
+                            if (aSender) aSender.replaceTrack(audioTrack).catch(console.debug);
+                            else peerConnectionRef.current.addTrack(audioTrack, stream);
+                        }
+                    }
+
+                    if (localVideoRef.current) {
+                        localVideoRef.current.srcObject = stream;
+                        localVideoRef.current.muted = true;
+                        localVideoRef.current.play().catch((e) => console.debug('Local play error:', e));
+                    }
+                    if (lobbyVideoRef.current) {
+                        lobbyVideoRef.current.srcObject = stream;
+                        lobbyVideoRef.current.muted = true;
+                        lobbyVideoRef.current.play().catch((e) => console.debug('Lobby play error:', e));
+                    }
+
+                    toast.success('Physical media connected successfully.');
+                    return stream;
+                }
             }
+            throw new Error('Using Virtual HD Stream');
         } catch (err) {
             console.warn('Physical camera fallback notice:', err.message);
             // Seamlessly initialize high-definition virtual interactive video stream
@@ -648,11 +739,33 @@ const LiveInterviewRoom = () => {
             setIsVideoOn(wantVideo);
             setIsMicOn(wantAudio);
 
+            // Synchronize active WebRTC peer connection senders
+            if (peerConnectionRef.current) {
+                if (vTrack) {
+                    let vSender = peerConnectionRef.current.getSenders().find((s) => s.track?.kind === 'video');
+                    if (!vSender) vSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
+                    if (vSender) vSender.replaceTrack(vTrack).catch(console.debug);
+                    else peerConnectionRef.current.addTrack(vTrack, virtualStream);
+                }
+                if (aTrack) {
+                    let aSender = peerConnectionRef.current.getSenders().find((s) => s.track?.kind === 'audio');
+                    if (!aSender) aSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
+                    if (aSender) aSender.replaceTrack(aTrack).catch(console.debug);
+                    else peerConnectionRef.current.addTrack(aTrack, virtualStream);
+                }
+            }
+
             if (localVideoRef.current) {
                 localVideoRef.current.srcObject = virtualStream;
+                localVideoRef.current.muted = true;
                 localVideoRef.current.play().catch((e) => console.debug('Local play error:', e));
             }
-            toast.info('Connected with HD Avatar Video Stream (Guarantees live video visibility across all devices).');
+            if (lobbyVideoRef.current) {
+                lobbyVideoRef.current.srcObject = virtualStream;
+                lobbyVideoRef.current.muted = true;
+                lobbyVideoRef.current.play().catch((e) => console.debug('Lobby play error:', e));
+            }
+            toast.info('Connected with Live HD Avatar Video Stream.');
             return virtualStream;
         }
     };
@@ -928,12 +1041,19 @@ const LiveInterviewRoom = () => {
                 simulatedStopRef.current();
                 simulatedStopRef.current = null;
             }
+            if (simulatedScreenStreamRef.current?._cleanup) {
+                simulatedScreenStreamRef.current._cleanup();
+                simulatedScreenStreamRef.current = null;
+            }
             simulatedStreamRef.current = null;
             setIsSimulatedPartnerActive(false);
             if (!remotePeerConnected) {
                 setHasRemoteStream(false);
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = null;
+                }
+                if (remoteScreenVideoRef.current) {
+                    remoteScreenVideoRef.current.srcObject = null;
                 }
             }
             toast.info('Test interview partner disconnected.');
@@ -966,23 +1086,53 @@ const LiveInterviewRoom = () => {
         }
     };
 
+    // Toggle simulated partner's screen share (allows user to test seeing other's screen)
+    const toggleSimulatedPartnerScreenShare = () => {
+        if (!isSimulatedPartnerActive) return;
+        if (remotePeerMediaState.isScreenSharing) {
+            // Revert back to partner's camera stream
+            if (simulatedScreenStreamRef.current?._cleanup) {
+                simulatedScreenStreamRef.current._cleanup();
+                simulatedScreenStreamRef.current = null;
+            }
+            remoteStreamRef.current = simulatedStreamRef.current;
+            setRemotePeerMediaState((prev) => ({ ...prev, isScreenSharing: false }));
+            if (remoteVideoRef.current && simulatedStreamRef.current) {
+                remoteVideoRef.current.srcObject = simulatedStreamRef.current;
+                remoteVideoRef.current.play().catch(console.debug);
+            }
+            toast.info('Test partner stopped broadcasting their screen.');
+        } else {
+            const partnerName = isRecruiter
+                ? (candidate.fullname || 'Alex Rivera')
+                : (assignedInterviewer.name || recruiter.fullname || 'Sarah Chen');
+            const partnerScreenStream = createVirtualScreenStream(partnerName);
+            simulatedScreenStreamRef.current = partnerScreenStream;
+            remoteStreamRef.current = partnerScreenStream;
+            setRemotePeerMediaState((prev) => ({ ...prev, isScreenSharing: true }));
+            toast.success(`${partnerName} is now sharing their screen!`);
+        }
+    };
+
     // Virtual HD Screen Stream for presentation broadcast if browser/iframe blocks getDisplayMedia
-    const createVirtualScreenStream = () => {
+    const createVirtualScreenStream = (broadcasterName = null) => {
+        const presenter = broadcasterName || user?.fullname || 'Participant';
         const canvas = document.createElement('canvas');
         canvas.width = 1280;
         canvas.height = 720;
         canvas.style.position = 'fixed';
-        canvas.style.left = '-9999px';
-        canvas.style.top = '-9999px';
-        canvas.style.width = '1px';
-        canvas.style.height = '1px';
-        canvas.style.opacity = '0';
+        canvas.style.left = '-10000px';
+        canvas.style.top = '0';
+        canvas.style.width = '1280px';
+        canvas.style.height = '720px';
         canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = '-999';
         if (document.body) document.body.appendChild(canvas);
 
         const ctx = canvas.getContext('2d');
         let frame = 0;
         let animId, intervalId;
+        let sTrack = null;
 
         const draw = () => {
             frame++;
@@ -999,7 +1149,7 @@ const LiveInterviewRoom = () => {
 
             ctx.fillStyle = '#f1f5f9';
             ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-            ctx.fillText(`HireHub AI // Live Screen Presentation • ${user?.fullname || 'Participant'}`, 100, 32);
+            ctx.fillText(`HireHub AI // Live Screen Presentation • ${presenter}`, 100, 32);
 
             // Live Indicator
             ctx.fillStyle = '#ef4444';
@@ -1029,7 +1179,7 @@ const LiveInterviewRoom = () => {
             ctx.strokeStyle = '#1e293b';
             ctx.strokeRect(64, 175, 1150, 480);
 
-            const lines = (code || '// Shared Live Code Workspace').split('\n').slice(0, 16);
+            const lines = (code || '// Shared Live Code Workspace\nfunction solve(input) {\n    return input;\n}').split('\n').slice(0, 16);
             lines.forEach((l, i) => {
                 ctx.fillStyle = '#64748b';
                 ctx.font = '14px monospace';
@@ -1044,6 +1194,15 @@ const LiveInterviewRoom = () => {
             ctx.beginPath();
             ctx.arc(1170, 625, 8 + pulse, 0, Math.PI * 2);
             ctx.fill();
+
+            // Clock
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '12px monospace';
+            ctx.fillText(`Clock: ${new Date().toLocaleTimeString()}`, 980, 629);
+
+            if (sTrack && sTrack.requestFrame) {
+                try { sTrack.requestFrame(); } catch (e) { /* ignore */ }
+            }
         };
 
         draw();
@@ -1055,6 +1214,7 @@ const LiveInterviewRoom = () => {
         intervalId = setInterval(draw, 40);
 
         const stream = canvas.captureStream(30);
+        sTrack = stream.getVideoTracks()[0];
         stream._cleanup = () => {
             if (animId) cancelAnimationFrame(animId);
             if (intervalId) clearInterval(intervalId);
@@ -1072,6 +1232,10 @@ const LiveInterviewRoom = () => {
             if (screenStreamRef.current) {
                 if (screenStreamRef.current._cleanup) screenStreamRef.current._cleanup();
                 screenStreamRef.current.getTracks().forEach((track) => track.stop());
+            }
+            if (simulatedScreenStreamRef.current) {
+                if (simulatedScreenStreamRef.current._cleanup) simulatedScreenStreamRef.current._cleanup();
+                simulatedScreenStreamRef.current.getTracks().forEach((track) => track.stop());
             }
             if (virtualStreamStopRef.current) {
                 virtualStreamStopRef.current();
@@ -1160,7 +1324,7 @@ const LiveInterviewRoom = () => {
                     videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
                 }
                 if (videoSender && camTrack) {
-                    await videoSender.replaceTrack(camTrack);
+                    await videoSender.replaceTrack(camTrack).catch(console.debug);
                 }
             }
 
@@ -1179,15 +1343,11 @@ const LiveInterviewRoom = () => {
                 if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
                     try {
                         screenStream = await navigator.mediaDevices.getDisplayMedia({
-                            video: { cursor: 'always', displaySurface: 'monitor' },
+                            video: { cursor: 'always' },
                             audio: false,
                         });
                     } catch (displayErr) {
-                        console.warn('Native getDisplayMedia restricted or cancelled:', displayErr.message);
-                        if (displayErr.name === 'NotAllowedError' && displayErr.message?.toLowerCase().includes('user denied')) {
-                            toast.info('Screen share selection was cancelled.');
-                            return;
-                        }
+                        console.warn('Native getDisplayMedia restricted or unavailable:', displayErr.message);
                     }
                 }
 
@@ -1202,6 +1362,12 @@ const LiveInterviewRoom = () => {
                 screenStreamRef.current = screenStream;
                 setIsScreenSharing(true);
 
+                if (screenVideoRef.current) {
+                    screenVideoRef.current.srcObject = screenStream;
+                    screenVideoRef.current.muted = true;
+                    screenVideoRef.current.play().catch(console.debug);
+                }
+
                 const screenTrack = screenStream.getVideoTracks()[0];
 
                 // Dynamically forward screen track to peer over WebRTC
@@ -1211,7 +1377,7 @@ const LiveInterviewRoom = () => {
                         videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
                     }
                     if (videoSender) {
-                        await videoSender.replaceTrack(screenTrack);
+                        await videoSender.replaceTrack(screenTrack).catch(console.debug);
                     } else {
                         peerConnectionRef.current.addTrack(screenTrack, screenStream);
                     }
@@ -1238,7 +1404,7 @@ const LiveInterviewRoom = () => {
                                 videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
                             }
                             if (videoSender && camTrack) {
-                                await videoSender.replaceTrack(camTrack);
+                                await videoSender.replaceTrack(camTrack).catch(console.debug);
                             }
                         }
 
@@ -1328,10 +1494,14 @@ const LiveInterviewRoom = () => {
         try {
             // 1. Try Backend Execution Endpoint First
             axios.defaults.withCredentials = true;
-            const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${roomId}/run-code`, {
-                code,
-                language: selectedLanguage,
-            });
+            const res = await axios.post(
+                `${INTERVIEW_API_END_POINT}/room/${roomId}/run-code`,
+                {
+                    code,
+                    language: selectedLanguage,
+                },
+                { timeout: 4000 }
+            );
 
             if (res.data && res.data.success && res.data.output) {
                 outputResult = res.data.output;
@@ -1984,6 +2154,7 @@ const LiveInterviewRoom = () => {
                         <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-indigo-500 shadow-2xl shrink-0">
                             <video
                                 ref={(el) => {
+                                    remoteScreenVideoRef.current = el;
                                     if (el && remoteStreamRef.current && el.srcObject !== remoteStreamRef.current) {
                                         el.srcObject = remoteStreamRef.current;
                                         el.play().catch((err) => console.debug('Remote screen play err:', err));
@@ -2007,9 +2178,17 @@ const LiveInterviewRoom = () => {
                     {isScreenSharing && (
                         <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-purple-500 shadow-lg shrink-0">
                             <video
-                                ref={screenVideoRef}
+                                ref={(el) => {
+                                    screenVideoRef.current = el;
+                                    if (el && screenStreamRef.current && el.srcObject !== screenStreamRef.current) {
+                                        el.srcObject = screenStreamRef.current;
+                                        el.muted = true;
+                                        el.play().catch((err) => console.debug('Screen video play err:', err));
+                                    }
+                                }}
                                 autoPlay
                                 playsInline
+                                muted
                                 className="w-full h-full object-contain"
                             />
                             <div className="absolute top-3 left-3 bg-purple-600/90 text-white px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 shadow-md">
@@ -2030,7 +2209,14 @@ const LiveInterviewRoom = () => {
                         {/* Box 1: Local User */}
                         <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center group shadow-md aspect-video sm:aspect-auto">
                             <video
-                                ref={localVideoRef}
+                                ref={(el) => {
+                                    localVideoRef.current = el;
+                                    if (el && localStreamRef.current && el.srcObject !== localStreamRef.current) {
+                                        el.srcObject = localStreamRef.current;
+                                        el.muted = true;
+                                        el.play().catch((err) => console.debug('Local video play err:', err));
+                                    }
+                                }}
                                 autoPlay
                                 playsInline
                                 muted
@@ -2090,7 +2276,16 @@ const LiveInterviewRoom = () => {
                         <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center shadow-md aspect-video sm:aspect-auto">
                             {/* Always keep remote video element mounted so audio track plays continuously without DOM tearing */}
                             <video
-                                ref={remoteVideoRef}
+                                ref={(el) => {
+                                    remoteVideoRef.current = el;
+                                    if (el && remoteStreamRef.current && el.srcObject !== remoteStreamRef.current) {
+                                        el.srcObject = remoteStreamRef.current;
+                                        el.play().catch((err) => {
+                                            console.debug('Remote video play err:', err);
+                                            if (err?.name === 'NotAllowedError') setAudioBlockedByBrowser(true);
+                                        });
+                                    }
+                                }}
                                 autoPlay
                                 playsInline
                                 className={`w-full h-full object-cover ${hasRemoteStream && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
@@ -2136,7 +2331,7 @@ const LiveInterviewRoom = () => {
                                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                                                 Waiting for {isRecruiter ? 'Candidate' : 'Interviewer'} to join...
                                             </p>
-                                            <div className="flex items-center justify-center gap-2 pt-1">
+                                            <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
                                                 <Button
                                                     size="sm"
                                                     onClick={toggleSimulatedPartner}
@@ -2160,16 +2355,26 @@ const LiveInterviewRoom = () => {
                                 </div>
                             )}
 
-                            {/* Simulated Test Partner Toggle Badge */}
+                            {/* Simulated Test Partner Controls */}
                             {isSimulatedPartnerActive && (
-                                <button
-                                    onClick={toggleSimulatedPartner}
-                                    className="absolute top-2.5 right-2.5 bg-slate-900/90 border border-indigo-500/50 hover:bg-indigo-900/60 text-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md z-10 cursor-pointer"
-                                    title="Disconnect simulated test stream"
-                                >
-                                    <Sparkles className="w-3 h-3 text-indigo-400" />
-                                    <span>Test Partner (Disconnect)</span>
-                                </button>
+                                <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
+                                    <button
+                                        onClick={toggleSimulatedPartnerScreenShare}
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md cursor-pointer transition-colors ${remotePeerMediaState.isScreenSharing ? 'bg-purple-600 text-white' : 'bg-slate-900/90 border border-purple-500/50 hover:bg-purple-900/50 text-purple-200'}`}
+                                        title="Simulate remote partner sharing their screen"
+                                    >
+                                        <MonitorUp className="w-3 h-3" />
+                                        <span>{remotePeerMediaState.isScreenSharing ? 'Stop Partner Screen' : 'Partner Screen'}</span>
+                                    </button>
+                                    <button
+                                        onClick={toggleSimulatedPartner}
+                                        className="bg-slate-900/90 border border-rose-500/50 hover:bg-rose-900/60 text-rose-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md cursor-pointer"
+                                        title="Disconnect simulated test stream"
+                                    >
+                                        <PhoneOff className="w-3 h-3 text-rose-400" />
+                                        <span>Disconnect</span>
+                                    </button>
+                                </div>
                             )}
 
                             {/* Browser Audio Autoplay Unblocker */}
