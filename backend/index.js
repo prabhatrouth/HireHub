@@ -125,24 +125,11 @@ async function startServer() {
             });
             console.log("[HireHub] Serving static build from frontend/dist");
         } else {
-            console.warn("[HireHub] frontend/dist/index.html not found! Attempting Vite fallback or providing status page.");
-            try {
-                const { createServer: createViteServer } = await import("vite");
-                const vite = await createViteServer({
-                    root: frontendDir,
-                    server: {
-                        middlewareMode: true,
-                        hmr: false,
-                    },
-                    appType: "spa",
-                });
-                app.use(vite.middlewares);
-            } catch (fallbackErr) {
-                app.get("*", (req, res) => {
-                    if (req.path.startsWith("/api/")) return res.status(404).json({ error: "API route not found" });
-                    res.send("<h1>HireHub is running</h1><p>Building frontend assets or API ready. Please ensure 'npm run build' has completed.</p>");
-                });
-            }
+            console.log("[HireHub] Backend running in API-only mode (frontend/dist not found).");
+            app.get("*", (req, res) => {
+                if (req.path.startsWith("/api/")) return res.status(404).json({ error: "API route not found" });
+                res.status(200).send("<h1>HireHub API Backend is Running</h1><p>Render deploy successful. API routes and Socket.io active on /api/* and /socket.io</p>");
+            });
         }
     }
 
