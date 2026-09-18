@@ -39,12 +39,14 @@ import {
     Eye,
     FileCheck,
     UserCheck,
-    Lock
+    Lock,
+    Volume2,
+    VolumeX
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { io } from 'socket.io-client';
-import { INTERVIEW_API_END_POINT } from '@/utils/constant';
+import { INTERVIEW_API_END_POINT, SOCKET_SERVER_URL } from '@/utils/constant';
 
 const CODE_TEMPLATES = {
     javascript: `// JavaScript Live Coding
@@ -148,7 +150,10 @@ const LiveInterviewRoom = () => {
     const pendingIceCandidatesRef = useRef([]);
     const isRemoteCodeUpdateRef = useRef(false);
     const codeDebounceTimerRef = useRef(null);
+    const lastLocalKeystrokeRef = useRef(0);
+    const remotePeerSocketIdRef = useRef(null);
     const virtualStreamStopRef = useRef(null);
+    const [audioBlockedByBrowser, setAudioBlockedByBrowser] = useState(false);
 
     // WebRTC STUN Configuration
     const ICE_SERVERS = {
@@ -156,6 +161,9 @@ const LiveInterviewRoom = () => {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' },
         ],
     };
 
@@ -170,7 +178,13 @@ const LiveInterviewRoom = () => {
     useEffect(() => {
         if (remoteVideoRef.current && remoteStreamRef.current) {
             remoteVideoRef.current.srcObject = remoteStreamRef.current;
-            remoteVideoRef.current.play().catch((err) => console.debug('Remote play error:', err));
+            remoteVideoRef.current.muted = false;
+            remoteVideoRef.current.play().catch((err) => {
+                console.debug('Remote play error:', err);
+                if (err.name === 'NotAllowedError') {
+                    setAudioBlockedByBrowser(true);
+                }
+            });
         }
     }, [hasRemoteStream, remotePeerMediaState.isVideoOn]);
 
@@ -342,11 +356,14 @@ const LiveInterviewRoom = () => {
                 setIsLive(data.status === 'live');
 
                 // Update code and chat if not currently being actively typed
-                if (!silent || !code) {
-                    if (data.sharedCode && data.sharedCode !== code && !isRemoteCodeUpdateRef.current) {
+                const isActivelyTypingLocally = Date.now() - (lastLocalKeystrokeRef.current || 0) < 1500;
+                if (!isActivelyTypingLocally && !isRemoteCodeUpdateRef.current) {
+                    if (data.sharedCode !== undefined && data.sharedCode !== code) {
                         setCode(data.sharedCode);
                     }
-                    if (data.sharedLanguage) setSelectedLanguage(data.sharedLanguage);
+                    if (data.sharedLanguage && data.sharedLanguage !== selectedLanguage) {
+                        setSelectedLanguage(data.sharedLanguage);
+                    }
                 }
 
                 if (data.chatMessages && Array.isArray(data.chatMessages)) {
@@ -401,6 +418,10 @@ const LiveInterviewRoom = () => {
 
     // 2. WebRTC Peer Connection Helper
     const createPeerConnection = (targetSocketId) => {
+        if (targetSocketId) {
+            remotePeerSocketIdRef.current = targetSocketId;
+        }
+
         if (peerConnectionRef.current) {
             try {
                 peerConnectionRef.current.close();
@@ -417,7 +438,11 @@ const LiveInterviewRoom = () => {
         // Add local audio and video tracks
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((track) => {
-                pc.addTrack(track, localStreamRef.current);
+                try {
+                    pc.addTrack(track, localStreamRef.current);
+                } catch (tErr) {
+                    console.debug('Track add notice:', tErr);
+                }
             });
         }
 
@@ -438,15 +463,22 @@ const LiveInterviewRoom = () => {
             setIsWebRTCConnecting(false);
             if (remoteVideoRef.current) {
                 remoteVideoRef.current.srcObject = stream;
-                remoteVideoRef.current.play().catch((err) => console.debug('Remote video play:', err));
+                remoteVideoRef.current.muted = false;
+                remoteVideoRef.current.play().catch((err) => {
+                    console.debug('Remote video play notice:', err);
+                    if (err.name === 'NotAllowedError') {
+                        setAudioBlockedByBrowser(true);
+                    }
+                });
             }
         };
 
         // Forward ICE candidates to target socket peer
         pc.onicecandidate = (event) => {
-            if (event.candidate && socketRef.current) {
+            const peerId = targetSocketId || remotePeerSocketIdRef.current;
+            if (event.candidate && socketRef.current && peerId) {
                 socketRef.current.emit('webrtc-ice-candidate', {
-                    targetSocketId,
+                    targetSocketId: peerId,
                     candidate: event.candidate,
                 });
             }
@@ -457,13 +489,42 @@ const LiveInterviewRoom = () => {
             if (pc.connectionState === 'connected') {
                 setIsWebRTCConnecting(false);
                 setHasRemoteStream(true);
-                toast.success('Live video stream connected!');
-            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                toast.success('Live video & voice stream connected!');
+            } else if (pc.connectionState === 'failed') {
+                setIsWebRTCConnecting(false);
+                console.warn('[WebRTC] Connection failed, attempting ICE restart...');
+                const peerId = targetSocketId || remotePeerSocketIdRef.current;
+                if (peerId) initiateOffer(peerId, true);
+            } else if (pc.connectionState === 'disconnected') {
                 setIsWebRTCConnecting(false);
             }
         };
 
         return pc;
+    };
+
+    // Helper to reliably initiate a WebRTC offer to a remote peer
+    const initiateOffer = async (targetSocketId, iceRestart = false) => {
+        if (!targetSocketId || !socketRef.current) return;
+        try {
+            setIsWebRTCConnecting(true);
+            remotePeerSocketIdRef.current = targetSocketId;
+            const pc = createPeerConnection(targetSocketId);
+            const offer = await pc.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+                iceRestart,
+            });
+            await pc.setLocalDescription(offer);
+            socketRef.current.emit('webrtc-offer', {
+                targetSocketId,
+                sdp: offer,
+            });
+            console.log('[WebRTC] Offer transmitted to peer:', targetSocketId);
+        } catch (offerErr) {
+            console.error('[WebRTC] Error initiating offer:', offerErr);
+            setIsWebRTCConnecting(false);
+        }
     };
 
     // 3. Request Media Streams (Native Webcam with Seamless Virtual HD Fallback)
@@ -478,8 +539,8 @@ const LiveInterviewRoom = () => {
 
             if (!forceVirtual && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 const constraints = {
-                    video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
-                    audio: wantAudio,
+                    video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
+                    audio: wantAudio ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
                 };
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 localStreamRef.current = stream;
@@ -489,6 +550,7 @@ const LiveInterviewRoom = () => {
 
                 if (localVideoRef.current) {
                     localVideoRef.current.srcObject = stream;
+                    localVideoRef.current.play().catch((e) => console.debug('Local play error:', e));
                 }
                 toast.success('Physical Camera & Microphone connected successfully.');
                 return stream;
@@ -506,6 +568,7 @@ const LiveInterviewRoom = () => {
 
             if (localVideoRef.current) {
                 localVideoRef.current.srcObject = virtualStream;
+                localVideoRef.current.play().catch((e) => console.debug('Local play error:', e));
             }
             toast.info('Connected with HD Avatar Video Stream (Guarantees live video visibility across all devices).');
             return virtualStream;
@@ -520,11 +583,20 @@ const LiveInterviewRoom = () => {
         setIsJoining(false);
 
         // Connect Socket.io for Real-Time Event Communication & WebRTC Signaling
-        const socket = io(window.location.origin, {
+        const socketTargetUrl = SOCKET_SERVER_URL || window.location.origin;
+        console.log('[Socket] Connecting to live signaling server at:', socketTargetUrl);
+        const socket = io(socketTargetUrl, {
             withCredentials: true,
             transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 20,
+            reconnectionDelay: 1000,
         });
         socketRef.current = socket;
+
+        socket.on('connect_error', (cErr) => {
+            console.warn('[Socket] Connection attempt notice:', cErr?.message);
+        });
 
         socket.on('connect', () => {
             console.log('[Socket] Connected to live interview signaling server:', socket.id);
@@ -545,24 +617,15 @@ const LiveInterviewRoom = () => {
                 const peer = peers[0];
                 setRemotePeerConnected(true);
                 setRemotePeerInfo(peer);
+                remotePeerSocketIdRef.current = peer.socketId;
                 setRemotePeerMediaState({
                     isVideoOn: peer.isVideoOn ?? true,
                     isMicOn: peer.isMicOn ?? true,
                     isScreenSharing: peer.isScreenSharing ?? false,
                 });
 
-                // Create WebRTC Offer as new joiner
-                try {
-                    const pc = createPeerConnection(peer.socketId);
-                    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-                    await pc.setLocalDescription(offer);
-                    socket.emit('webrtc-offer', {
-                        targetSocketId: peer.socketId,
-                        sdp: offer,
-                    });
-                } catch (offerErr) {
-                    console.error('[WebRTC] Error creating offer for existing peer:', offerErr);
-                }
+                // Joiner initiates WebRTC Offer to the existing peer
+                await initiateOffer(peer.socketId);
             }
         });
 
@@ -571,12 +634,22 @@ const LiveInterviewRoom = () => {
             console.log('[Socket] Participant joined:', peerData);
             setRemotePeerConnected(true);
             setRemotePeerInfo(peerData);
+            remotePeerSocketIdRef.current = peerData.socketId;
             setRemotePeerMediaState({
                 isVideoOn: peerData.isVideoOn ?? true,
                 isMicOn: peerData.isMicOn ?? true,
                 isScreenSharing: false,
             });
             toast.info(`${peerData.userName} joined the room! Connecting live video...`);
+
+            // Fallback handshake: if peer doesn't send offer within 2.5 seconds, initiate from this side
+            setTimeout(() => {
+                if (peerConnectionRef.current && (peerConnectionRef.current.connectionState === 'connected' || peerConnectionRef.current.remoteDescription)) {
+                    return;
+                }
+                console.log('[WebRTC] Handshake fallback: initiating offer to joined peer:', peerData.socketId);
+                initiateOffer(peerData.socketId);
+            }, 2500);
         });
 
         // Event: WebRTC Offer Received
@@ -584,6 +657,7 @@ const LiveInterviewRoom = () => {
             console.log('[WebRTC] Received offer from:', fromSocketId);
             setRemotePeerConnected(true);
             if (senderInfo) setRemotePeerInfo(senderInfo);
+            remotePeerSocketIdRef.current = fromSocketId;
 
             try {
                 const pc = createPeerConnection(fromSocketId);
@@ -661,18 +735,16 @@ const LiveInterviewRoom = () => {
 
         // Event: Real-time Live Code Synchronization
         socket.on('code-update', ({ code: newCode, language: newLang, senderId, senderName }) => {
-            if (senderId !== (user?._id || 'local')) {
-                isRemoteCodeUpdateRef.current = true;
-                setCode(newCode);
-                if (newLang) setSelectedLanguage(newLang);
-                setLastCodeEditNotice(`${senderName || 'Peer'} is typing live...`);
-                setTimeout(() => {
-                    isRemoteCodeUpdateRef.current = false;
-                }, 200);
-                setTimeout(() => {
-                    setLastCodeEditNotice('');
-                }, 2500);
-            }
+            isRemoteCodeUpdateRef.current = true;
+            setCode(newCode);
+            if (newLang) setSelectedLanguage(newLang);
+            setLastCodeEditNotice(`${senderName || 'Peer'} is typing live...`);
+            setTimeout(() => {
+                isRemoteCodeUpdateRef.current = false;
+            }, 300);
+            setTimeout(() => {
+                setLastCodeEditNotice('');
+            }, 2500);
         });
 
         // Event: Real-time Language Switch
@@ -919,6 +991,7 @@ const LiveInterviewRoom = () => {
 
     // Real-Time Code Change Handler
     const handleCodeChange = (newCode) => {
+        lastLocalKeystrokeRef.current = Date.now();
         setCode(newCode);
 
         // Broadcast to peers via WebSocket immediately
@@ -936,7 +1009,7 @@ const LiveInterviewRoom = () => {
         }
         codeDebounceTimerRef.current = setTimeout(() => {
             syncCodeToRoom(newCode, selectedLanguage);
-        }, 1200);
+        }, 800);
     };
 
     // Real-Time Language Change Handler
@@ -1531,15 +1604,14 @@ const LiveInterviewRoom = () => {
                     <div className={`grid ${isScreenSharing ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'} gap-3 flex-1 min-h-[220px]`}>
                         {/* Box 1: Local User */}
                         <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center group shadow-md aspect-video sm:aspect-auto">
-                            {isVideoOn ? (
-                                <video
-                                    ref={localVideoRef}
-                                    autoPlay
-                                    playsInline
-                                    muted
-                                    className={`w-full h-full object-cover ${isUsingVirtualCam ? '' : 'transform -scale-x-100'}`}
-                                />
-                            ) : (
+                            <video
+                                ref={localVideoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className={`w-full h-full object-cover ${isUsingVirtualCam ? '' : 'transform -scale-x-100'} ${isVideoOn ? 'block' : 'hidden'}`}
+                            />
+                            {!isVideoOn && (
                                 <div className="text-center p-4">
                                     <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto border-2 border-purple-500/50 mb-2">
                                         <AvatarImage src={user?.profile?.profilePhoto} />
@@ -1591,14 +1663,15 @@ const LiveInterviewRoom = () => {
 
                         {/* Box 2: Remote Peer (Live WebRTC Video Stream & Peer Presence) */}
                         <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center shadow-md aspect-video sm:aspect-auto">
-                            {hasRemoteStream && remotePeerMediaState.isVideoOn ? (
-                                <video
-                                    ref={remoteVideoRef}
-                                    autoPlay
-                                    playsInline
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
+                            {/* Always keep remote video element mounted so audio track plays continuously without DOM tearing */}
+                            <video
+                                ref={remoteVideoRef}
+                                autoPlay
+                                playsInline
+                                className={`w-full h-full object-cover ${hasRemoteStream && remotePeerMediaState.isVideoOn ? 'block' : 'hidden'}`}
+                            />
+
+                            {(!hasRemoteStream || !remotePeerMediaState.isVideoOn) && (
                                 <div className="text-center p-4">
                                     <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto border-2 border-indigo-500/50 mb-2 shadow-lg">
                                         <AvatarImage src={isRecruiter ? candidate.profile?.profilePhoto : undefined} />
@@ -1610,10 +1683,23 @@ const LiveInterviewRoom = () => {
                                         {remotePeerInfo?.userName || (isRecruiter ? candidate.fullname || 'Candidate' : assignedInterviewer.name || recruiter.fullname || 'Interviewer')}
                                     </h4>
                                     {remotePeerConnected ? (
-                                        <p className="text-[10px] text-emerald-400 flex items-center justify-center gap-1 mt-0.5 font-medium">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                                            {isWebRTCConnecting ? 'Negotiating Video Pipeline...' : 'Live Connected (Video Off)'}
-                                        </p>
+                                        <div className="mt-1">
+                                            <p className="text-[10px] text-emerald-400 flex items-center justify-center gap-1 font-medium">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                                {isWebRTCConnecting ? 'Negotiating Video & Voice...' : 'Live Connected (Camera Off)'}
+                                            </p>
+                                            {!hasRemoteStream && remotePeerSocketIdRef.current && (
+                                                <button
+                                                    onClick={() => {
+                                                        initiateOffer(remotePeerSocketIdRef.current, true);
+                                                        toast.info('Re-establishing video pipeline...');
+                                                    }}
+                                                    className="mt-1.5 text-[10px] text-indigo-400 hover:text-indigo-300 underline block mx-auto cursor-pointer"
+                                                >
+                                                    Tap to reconnect video feed
+                                                </button>
+                                            )}
+                                        </div>
                                     ) : (
                                         <p className="text-[10px] text-amber-400 flex items-center justify-center gap-1 mt-0.5 font-medium">
                                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -1621,6 +1707,23 @@ const LiveInterviewRoom = () => {
                                         </p>
                                     )}
                                 </div>
+                            )}
+
+                            {/* Browser Audio Autoplay Unblocker */}
+                            {audioBlockedByBrowser && (
+                                <button
+                                    onClick={() => {
+                                        if (remoteVideoRef.current) {
+                                            remoteVideoRef.current.play().catch(console.debug);
+                                            setAudioBlockedByBrowser(false);
+                                            toast.success('Audio enabled');
+                                        }
+                                    }}
+                                    className="absolute top-2.5 right-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-lg animate-bounce z-10"
+                                >
+                                    <Volume2 className="w-3.5 h-3.5" />
+                                    <span>Unmute Voice</span>
+                                </button>
                             )}
 
                             {/* Remote Status Badge */}
