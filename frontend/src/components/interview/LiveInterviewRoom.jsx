@@ -142,6 +142,8 @@ const LiveInterviewRoom = () => {
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const screenVideoRef = useRef(null);
+    const lobbyVideoRef = useRef(null);
+    const remoteScreenVideoRef = useRef(null);
     const localStreamRef = useRef(null);
     const remoteStreamRef = useRef(null);
     const screenStreamRef = useRef(null);
@@ -153,6 +155,9 @@ const LiveInterviewRoom = () => {
     const lastLocalKeystrokeRef = useRef(0);
     const remotePeerSocketIdRef = useRef(null);
     const virtualStreamStopRef = useRef(null);
+    const simulatedStreamRef = useRef(null);
+    const simulatedStopRef = useRef(null);
+    const [isSimulatedPartnerActive, setIsSimulatedPartnerActive] = useState(false);
     const [audioBlockedByBrowser, setAudioBlockedByBrowser] = useState(false);
 
     // WebRTC STUN Configuration
@@ -169,11 +174,18 @@ const LiveInterviewRoom = () => {
 
     // Video stream attachment effects for reliable React DOM rendering
     useEffect(() => {
-        if (localVideoRef.current && localStreamRef.current) {
+        if (!hasJoined && lobbyVideoRef.current && localStreamRef.current) {
+            lobbyVideoRef.current.srcObject = localStreamRef.current;
+            lobbyVideoRef.current.play().catch((err) => console.debug('Lobby preview play error:', err));
+        }
+    }, [hasJoined, isVideoOn, isUsingVirtualCam]);
+
+    useEffect(() => {
+        if (hasJoined && localVideoRef.current && localStreamRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current;
             localVideoRef.current.play().catch((err) => console.debug('Local play error:', err));
         }
-    }, [isVideoOn, isUsingVirtualCam, hasJoined]);
+    }, [hasJoined, isVideoOn, isUsingVirtualCam]);
 
     useEffect(() => {
         if (remoteVideoRef.current && remoteStreamRef.current) {
@@ -186,7 +198,39 @@ const LiveInterviewRoom = () => {
                 }
             });
         }
-    }, [hasRemoteStream, remotePeerMediaState.isVideoOn]);
+    }, [hasRemoteStream, remotePeerMediaState.isVideoOn, isSimulatedPartnerActive]);
+
+    useEffect(() => {
+        if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
+            screenVideoRef.current.srcObject = screenStreamRef.current;
+            screenVideoRef.current.play().catch((err) => console.debug('Local screen play error:', err));
+        }
+    }, [isScreenSharing]);
+
+    useEffect(() => {
+        if (remotePeerMediaState.isScreenSharing && remoteScreenVideoRef.current && remoteStreamRef.current) {
+            remoteScreenVideoRef.current.srcObject = remoteStreamRef.current;
+            remoteScreenVideoRef.current.play().catch((err) => console.debug('Remote screen play error:', err));
+        }
+    }, [remotePeerMediaState.isScreenSharing, hasRemoteStream]);
+
+    // Automatically initialize camera preview for the lobby
+    useEffect(() => {
+        let isMounted = true;
+        const initPreview = async () => {
+            if (!localStreamRef.current && !hasJoined) {
+                try {
+                    await requestMediaStreams(true, true, false);
+                } catch (e) {
+                    console.debug('Lobby initial preview error:', e);
+                }
+            }
+        };
+        initPreview();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     // Call Duration Timer
     const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -877,6 +921,148 @@ const LiveInterviewRoom = () => {
         toast.success(nextUseVirtual ? 'Switched to Virtual HD Cam' : 'Switched to Physical Webcam');
     };
 
+    // Toggle Simulated Test Partner for live two-way video & screen share testing when solo
+    const toggleSimulatedPartner = () => {
+        if (isSimulatedPartnerActive) {
+            if (simulatedStopRef.current) {
+                simulatedStopRef.current();
+                simulatedStopRef.current = null;
+            }
+            simulatedStreamRef.current = null;
+            setIsSimulatedPartnerActive(false);
+            if (!remotePeerConnected) {
+                setHasRemoteStream(false);
+                if (remoteVideoRef.current) {
+                    remoteVideoRef.current.srcObject = null;
+                }
+            }
+            toast.info('Test interview partner disconnected.');
+        } else {
+            const partnerName = isRecruiter
+                ? (candidate.fullname || 'Alex Rivera (Applicant)')
+                : (assignedInterviewer.name || recruiter.fullname || 'Sarah Chen (Lead Interviewer)');
+            const partnerRole = isRecruiter ? 'Full Stack Candidate' : 'Lead Engineering Panelist';
+            const simStream = createVirtualStream(partnerName, partnerRole);
+            simulatedStreamRef.current = simStream;
+            remoteStreamRef.current = simStream;
+            setIsSimulatedPartnerActive(true);
+            setHasRemoteStream(true);
+            setRemotePeerInfo({
+                userName: partnerName,
+                userRole: isRecruiter ? 'candidate' : 'panelist',
+                userId: 'simulated-partner-id',
+            });
+            setRemotePeerMediaState({
+                isVideoOn: true,
+                isMicOn: true,
+                isScreenSharing: false,
+            });
+
+            if (remoteVideoRef.current) {
+                remoteVideoRef.current.srcObject = simStream;
+                remoteVideoRef.current.play().catch(console.debug);
+            }
+            toast.success(`Connected test ${isRecruiter ? 'Candidate' : 'Interviewer'} feed for dual-video testing!`);
+        }
+    };
+
+    // Virtual HD Screen Stream for presentation broadcast if browser/iframe blocks getDisplayMedia
+    const createVirtualScreenStream = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 720;
+        canvas.style.position = 'fixed';
+        canvas.style.left = '-9999px';
+        canvas.style.top = '-9999px';
+        canvas.style.width = '1px';
+        canvas.style.height = '1px';
+        canvas.style.opacity = '0';
+        canvas.style.pointerEvents = 'none';
+        if (document.body) document.body.appendChild(canvas);
+
+        const ctx = canvas.getContext('2d');
+        let frame = 0;
+        let animId, intervalId;
+
+        const draw = () => {
+            frame++;
+            ctx.fillStyle = '#0a0f1d';
+            ctx.fillRect(0, 0, 1280, 720);
+
+            // App Header Bar
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 1280, 52);
+
+            ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(28, 26, 7, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(48, 26, 7, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.arc(68, 26, 7, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = '#f1f5f9';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillText(`HireHub AI // Live Screen Presentation • ${user?.fullname || 'Participant'}`, 100, 32);
+
+            // Live Indicator
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(1120, 12, 130, 28);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText('● LIVE SCREEN', 1136, 30);
+
+            // Shared Code Container
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(36, 76, 1208, 608);
+            ctx.strokeStyle = '#6366f1';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(36, 76, 1208, 608);
+
+            ctx.fillStyle = '#a5b4fc';
+            ctx.font = 'bold 13px monospace';
+            ctx.fillText(`// REAL-TIME SYSTEM ARCHITECTURE & CODE SOLUTION`, 64, 115);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 22px sans-serif';
+            ctx.fillText(`${job?.title || 'Technical Assessment'} • Interactive Live Broadcast`, 64, 150);
+
+            // Code Display Area
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(64, 175, 1150, 480);
+            ctx.strokeStyle = '#1e293b';
+            ctx.strokeRect(64, 175, 1150, 480);
+
+            const lines = (code || '// Shared Live Code Workspace').split('\n').slice(0, 16);
+            lines.forEach((l, i) => {
+                ctx.fillStyle = '#64748b';
+                ctx.font = '14px monospace';
+                ctx.fillText((i + 1).toString().padStart(2, '0'), 80, 205 + i * 26);
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillText(l, 115, 205 + i * 26);
+            });
+
+            // Activity Pulse
+            const pulse = (Math.sin(frame * 0.08) + 1) * 6;
+            ctx.fillStyle = '#22c55e';
+            ctx.beginPath();
+            ctx.arc(1170, 625, 8 + pulse, 0, Math.PI * 2);
+            ctx.fill();
+        };
+
+        draw();
+        const loop = () => {
+            draw();
+            animId = requestAnimationFrame(loop);
+        };
+        animId = requestAnimationFrame(loop);
+        intervalId = setInterval(draw, 40);
+
+        const stream = canvas.captureStream(30);
+        stream._cleanup = () => {
+            if (animId) cancelAnimationFrame(animId);
+            if (intervalId) clearInterval(intervalId);
+            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+        };
+        return stream;
+    };
+
     // Clean up streams & sockets on unmount
     useEffect(() => {
         return () => {
@@ -884,10 +1070,14 @@ const LiveInterviewRoom = () => {
                 localStreamRef.current.getTracks().forEach((track) => track.stop());
             }
             if (screenStreamRef.current) {
+                if (screenStreamRef.current._cleanup) screenStreamRef.current._cleanup();
                 screenStreamRef.current.getTracks().forEach((track) => track.stop());
             }
             if (virtualStreamStopRef.current) {
                 virtualStreamStopRef.current();
+            }
+            if (simulatedStopRef.current) {
+                simulatedStopRef.current();
             }
             if (peerConnectionRef.current) {
                 peerConnectionRef.current.close();
@@ -956,6 +1146,7 @@ const LiveInterviewRoom = () => {
     const toggleScreenShare = async () => {
         if (isScreenSharing) {
             if (screenStreamRef.current) {
+                if (screenStreamRef.current._cleanup) screenStreamRef.current._cleanup();
                 screenStreamRef.current.getTracks().forEach((track) => track.stop());
                 screenStreamRef.current = null;
             }
@@ -964,7 +1155,10 @@ const LiveInterviewRoom = () => {
             // Revert WebRTC video sender to camera/virtual feed
             if (peerConnectionRef.current && localStreamRef.current) {
                 const camTrack = localStreamRef.current.getVideoTracks()[0];
-                const videoSender = peerConnectionRef.current.getSenders().find((s) => s.track && s.track.kind === 'video');
+                let videoSender = peerConnectionRef.current.getSenders().find((s) => s.track?.kind === 'video');
+                if (!videoSender) {
+                    videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
+                }
                 if (videoSender && camTrack) {
                     await videoSender.replaceTrack(camTrack);
                 }
@@ -979,27 +1173,47 @@ const LiveInterviewRoom = () => {
             toast.info('Screen sharing stopped.');
         } else {
             try {
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                    toast.error('Screen sharing is not supported on this browser.');
-                    return;
+                let screenStream = null;
+
+                // Attempt native display capture if supported
+                if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+                    try {
+                        screenStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: { cursor: 'always', displaySurface: 'monitor' },
+                            audio: false,
+                        });
+                    } catch (displayErr) {
+                        console.warn('Native getDisplayMedia restricted or cancelled:', displayErr.message);
+                        if (displayErr.name === 'NotAllowedError' && displayErr.message?.toLowerCase().includes('user denied')) {
+                            toast.info('Screen share selection was cancelled.');
+                            return;
+                        }
+                    }
                 }
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { cursor: 'always' },
-                    audio: false,
-                });
+
+                // If native screen capture unavailable or restricted in iframe, fallback smoothly to HD presentation stream
+                if (!screenStream) {
+                    screenStream = createVirtualScreenStream();
+                    toast.info('Broadcasting live HD presentation screen stream.');
+                } else {
+                    toast.success('Live screen sharing active!');
+                }
+
                 screenStreamRef.current = screenStream;
-                if (screenVideoRef.current) {
-                    screenVideoRef.current.srcObject = screenStream;
-                }
                 setIsScreenSharing(true);
 
                 const screenTrack = screenStream.getVideoTracks()[0];
 
                 // Dynamically forward screen track to peer over WebRTC
-                if (peerConnectionRef.current) {
-                    const videoSender = peerConnectionRef.current.getSenders().find((s) => s.track && s.track.kind === 'video');
-                    if (videoSender && screenTrack) {
+                if (peerConnectionRef.current && screenTrack) {
+                    let videoSender = peerConnectionRef.current.getSenders().find((s) => s.track?.kind === 'video');
+                    if (!videoSender) {
+                        videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
+                    }
+                    if (videoSender) {
                         await videoSender.replaceTrack(screenTrack);
+                    } else {
+                        peerConnectionRef.current.addTrack(screenTrack, screenStream);
                     }
                 }
 
@@ -1009,33 +1223,36 @@ const LiveInterviewRoom = () => {
                         isScreenSharing: true,
                     });
                 }
-                toast.success('Screen sharing active!');
 
-                screenTrack.onended = async () => {
-                    setIsScreenSharing(false);
-                    screenStreamRef.current = null;
+                if (screenTrack) {
+                    screenTrack.onended = async () => {
+                        setIsScreenSharing(false);
+                        if (screenStreamRef.current?._cleanup) screenStreamRef.current._cleanup();
+                        screenStreamRef.current = null;
 
-                    // Revert WebRTC video sender back to local camera feed
-                    if (peerConnectionRef.current && localStreamRef.current) {
-                        const camTrack = localStreamRef.current.getVideoTracks()[0];
-                        const videoSender = peerConnectionRef.current.getSenders().find((s) => s.track && s.track.kind === 'video');
-                        if (videoSender && camTrack) {
-                            await videoSender.replaceTrack(camTrack);
+                        // Revert WebRTC video sender back to local camera feed
+                        if (peerConnectionRef.current && localStreamRef.current) {
+                            const camTrack = localStreamRef.current.getVideoTracks()[0];
+                            let videoSender = peerConnectionRef.current.getSenders().find((s) => s.track?.kind === 'video');
+                            if (!videoSender) {
+                                videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
+                            }
+                            if (videoSender && camTrack) {
+                                await videoSender.replaceTrack(camTrack);
+                            }
                         }
-                    }
 
-                    if (socketRef.current) {
-                        socketRef.current.emit('media-state-change', {
-                            roomId,
-                            isScreenSharing: false,
-                        });
-                    }
-                    toast.info('Screen sharing ended.');
-                };
-            } catch (err) {
-                if (err.name !== 'NotAllowedError') {
-                    toast.error('Could not start screen sharing: ' + err.message);
+                        if (socketRef.current) {
+                            socketRef.current.emit('media-state-change', {
+                                roomId,
+                                isScreenSharing: false,
+                            });
+                        }
+                        toast.info('Screen sharing ended.');
+                    };
                 }
+            } catch (err) {
+                toast.error('Could not start screen sharing: ' + err.message);
             }
         }
     };
@@ -1533,57 +1750,86 @@ const LiveInterviewRoom = () => {
                                 )}
                             </div>
 
-                            {/* Right Box: Device Readiness & Attend Action */}
+                            {/* Right Box: Live Camera Preview & Attend Action */}
                             <div className="space-y-4 bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between">
                                 <div className="space-y-3">
-                                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                                        <Settings className="w-4 h-4 text-purple-400" />
-                                        Device & Entry Settings
-                                    </h3>
-
-                                    <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl text-[11px] text-slate-300 flex items-start gap-2">
-                                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                                        <p>
-                                            Camera & mic will activate only after clicking <strong className="text-white">&apos;Attend Interview Call&apos;</strong>.
-                                        </p>
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                            <Settings className="w-4 h-4 text-purple-400" />
+                                            Live Device & Camera Check
+                                        </h3>
+                                        <span className="text-[10px] bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                            Ready to Connect
+                                        </span>
                                     </div>
 
-                                    {/* Device Toggle Options */}
-                                    <div className="space-y-2 pt-1">
-                                        <label className="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors">
-                                            <div className="flex items-center gap-2.5">
-                                                {joinWithVideo ? <VideoIcon className="w-4 h-4 text-purple-400" /> : <VideoOff className="w-4 h-4 text-slate-400" />}
-                                                <span className="text-xs font-semibold text-slate-200">Start with Camera On</span>
+                                    {/* Live Video Preview Window */}
+                                    <div className="relative aspect-video rounded-xl bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center shadow-inner group">
+                                        <video
+                                            ref={lobbyVideoRef}
+                                            autoPlay
+                                            playsInline
+                                            muted
+                                            className={`w-full h-full object-cover ${isUsingVirtualCam ? '' : 'transform -scale-x-100'} ${joinWithVideo ? 'block' : 'hidden'}`}
+                                        />
+                                        {!joinWithVideo && (
+                                            <div className="text-center p-4">
+                                                <Avatar className="w-14 h-14 mx-auto border-2 border-slate-700 mb-2">
+                                                    <AvatarImage src={user?.profile?.profilePhoto} />
+                                                    <AvatarFallback className="bg-purple-950 text-purple-200 font-bold">
+                                                        {user?.fullname?.charAt(0) || 'U'}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <p className="text-xs font-bold text-slate-400">Camera is turned off</p>
                                             </div>
-                                            <input
-                                                type="checkbox"
-                                                checked={joinWithVideo}
-                                                onChange={(e) => setJoinWithVideo(e.target.checked)}
-                                                className="w-4 h-4 accent-purple-600 rounded cursor-pointer"
-                                            />
-                                        </label>
+                                        )}
 
-                                        <label className="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors">
-                                            <div className="flex items-center gap-2.5">
-                                                {joinWithAudio ? <Mic className="w-4 h-4 text-purple-400" /> : <MicOff className="w-4 h-4 text-slate-400" />}
-                                                <span className="text-xs font-semibold text-slate-200">Start with Microphone On</span>
-                                            </div>
-                                            <input
-                                                type="checkbox"
-                                                checked={joinWithAudio}
-                                                onChange={(e) => setJoinWithAudio(e.target.checked)}
-                                                className="w-4 h-4 accent-purple-600 rounded cursor-pointer"
-                                            />
-                                        </label>
+                                        {/* Status Tag Overlay */}
+                                        <div className="absolute top-2 left-2 bg-slate-900/85 backdrop-blur-xs border border-slate-700/60 px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-200 flex items-center gap-1.5 shadow-sm">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                            <span>{isUsingVirtualCam ? 'HD Virtual Stream' : 'Live Camera'}</span>
+                                        </div>
+
+                                        {/* Quick Controls Toolbar */}
+                                        <div className="absolute bottom-2 inset-x-0 flex items-center justify-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setJoinWithVideo(!joinWithVideo)}
+                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 shadow-md cursor-pointer transition-colors ${joinWithVideo ? 'bg-slate-900/85 text-white border border-slate-700 hover:bg-slate-800' : 'bg-rose-600 text-white'}`}
+                                            >
+                                                {joinWithVideo ? <VideoIcon className="w-3.5 h-3.5 text-purple-400" /> : <VideoOff className="w-3.5 h-3.5" />}
+                                                <span>{joinWithVideo ? 'Cam On' : 'Cam Off'}</span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setJoinWithAudio(!joinWithAudio)}
+                                                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 shadow-md cursor-pointer transition-colors ${joinWithAudio ? 'bg-slate-900/85 text-white border border-slate-700 hover:bg-slate-800' : 'bg-rose-600 text-white'}`}
+                                            >
+                                                {joinWithAudio ? <Mic className="w-3.5 h-3.5 text-purple-400" /> : <MicOff className="w-3.5 h-3.5" />}
+                                                <span>{joinWithAudio ? 'Mic On' : 'Muted'}</span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={toggleCameraSource}
+                                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-900/85 text-slate-200 border border-slate-700 hover:bg-slate-800 flex items-center gap-1.5 shadow-md cursor-pointer"
+                                                title="Switch between Webcam and HD Virtual feed"
+                                            >
+                                                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                                                <span>{isUsingVirtualCam ? 'Webcam' : 'Virtual'}</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Attend Buttons */}
-                                <div className="space-y-2 pt-2">
+                                <div className="space-y-2 pt-1">
                                     <Button
                                         onClick={() => handleAttendInterview(joinWithVideo, joinWithAudio)}
                                         disabled={isJoining}
-                                        className="w-full h-12 text-sm font-extrabold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/40 rounded-xl gap-2 transition-all"
+                                        className="w-full h-12 text-sm font-extrabold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/40 rounded-xl gap-2 transition-all cursor-pointer"
                                     >
                                         <VideoIcon className="w-4 h-4" />
                                         <span>{isJoining ? 'Connecting...' : isInspectionMode ? 'Join Live Inspection' : 'Attend & Join Interview Call'}</span>
@@ -1595,7 +1841,7 @@ const LiveInterviewRoom = () => {
                                         size="sm"
                                         onClick={() => handleAttendInterview(false, false)}
                                         disabled={isJoining}
-                                        className="w-full h-9 text-xs font-semibold border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white rounded-xl"
+                                        className="w-full h-9 text-xs font-semibold border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white rounded-xl cursor-pointer"
                                     >
                                         Join in Silent / Presentation Mode
                                     </Button>
@@ -1885,12 +2131,45 @@ const LiveInterviewRoom = () => {
                                             )}
                                         </div>
                                     ) : (
-                                        <p className="text-[10px] text-amber-400 flex items-center justify-center gap-1 mt-0.5 font-medium">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                                            Waiting for {isRecruiter ? 'Candidate' : 'Interviewer'} to join...
-                                        </p>
+                                        <div className="mt-2 space-y-2">
+                                            <p className="text-[10px] text-amber-400 flex items-center justify-center gap-1 font-medium">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                                Waiting for {isRecruiter ? 'Candidate' : 'Interviewer'} to join...
+                                            </p>
+                                            <div className="flex items-center justify-center gap-2 pt-1">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={toggleSimulatedPartner}
+                                                    className="h-7 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-2.5 shadow-sm gap-1 cursor-pointer"
+                                                >
+                                                    <Sparkles className="w-3 h-3" />
+                                                    <span>Connect Test {isRecruiter ? 'Candidate' : 'Interviewer'}</span>
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={copyRoomLink}
+                                                    className="h-7 text-[10px] font-semibold border-slate-700 hover:bg-slate-800 text-slate-300 rounded-lg px-2 gap-1 cursor-pointer"
+                                                >
+                                                    <Copy className="w-3 h-3" />
+                                                    <span>Copy Link</span>
+                                                </Button>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
+                            )}
+
+                            {/* Simulated Test Partner Toggle Badge */}
+                            {isSimulatedPartnerActive && (
+                                <button
+                                    onClick={toggleSimulatedPartner}
+                                    className="absolute top-2.5 right-2.5 bg-slate-900/90 border border-indigo-500/50 hover:bg-indigo-900/60 text-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md z-10 cursor-pointer"
+                                    title="Disconnect simulated test stream"
+                                >
+                                    <Sparkles className="w-3 h-3 text-indigo-400" />
+                                    <span>Test Partner (Disconnect)</span>
+                                </button>
                             )}
 
                             {/* Browser Audio Autoplay Unblocker */}
