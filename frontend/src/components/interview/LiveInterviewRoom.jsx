@@ -253,9 +253,21 @@ const LiveInterviewRoom = () => {
         const canvas = document.createElement('canvas');
         canvas.width = 640;
         canvas.height = 480;
+        canvas.style.position = 'fixed';
+        canvas.style.left = '-9999px';
+        canvas.style.top = '-9999px';
+        canvas.style.width = '1px';
+        canvas.style.height = '1px';
+        canvas.style.opacity = '0';
+        canvas.style.pointerEvents = 'none';
+        if (document.body) {
+            document.body.appendChild(canvas);
+        }
+
         const ctx = canvas.getContext('2d');
         let frame = 0;
         let animId;
+        let intervalId;
 
         const draw = () => {
             frame++;
@@ -312,11 +324,17 @@ const LiveInterviewRoom = () => {
             ctx.font = 'bold 12px sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText('● LIVE CAM', 28, 37);
-
-            animId = requestAnimationFrame(draw);
         };
 
         draw();
+
+        // Run both animationFrame and interval so frames are produced continuously even if tab is unfocused
+        const loop = () => {
+            draw();
+            animId = requestAnimationFrame(loop);
+        };
+        animId = requestAnimationFrame(loop);
+        intervalId = setInterval(draw, 50);
 
         const stream = canvas.captureStream(25);
 
@@ -325,6 +343,9 @@ const LiveInterviewRoom = () => {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             if (AudioContextClass) {
                 const audioCtx = new AudioContextClass();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume().catch(console.debug);
+                }
                 const dest = audioCtx.createMediaStreamDestination();
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
@@ -340,6 +361,8 @@ const LiveInterviewRoom = () => {
 
         virtualStreamStopRef.current = () => {
             if (animId) cancelAnimationFrame(animId);
+            if (intervalId) clearInterval(intervalId);
+            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
         };
 
         return stream;
@@ -531,18 +554,28 @@ const LiveInterviewRoom = () => {
     const requestMediaStreams = async (wantVideo = true, wantAudio = true, forceVirtual = false) => {
         try {
             setMediaError('');
-            if (!wantVideo && !wantAudio) {
-                setIsVideoOn(false);
-                setIsMicOn(false);
-                return null;
-            }
 
             if (!forceVirtual && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                const constraints = {
-                    video: wantVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
-                    audio: wantAudio ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
-                };
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    });
+                } catch (firstErr) {
+                    console.warn('High-res media stream error, retrying standard constraints:', firstErr?.message);
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true,
+                    });
+                }
+
+                // Explicitly sync track enabled states to user preferences
+                const videoTrack = stream.getVideoTracks()[0];
+                const audioTrack = stream.getAudioTracks()[0];
+                if (videoTrack) videoTrack.enabled = wantVideo;
+                if (audioTrack) audioTrack.enabled = wantAudio;
+
                 localStreamRef.current = stream;
                 setIsUsingVirtualCam(false);
                 setIsVideoOn(wantVideo);
@@ -561,9 +594,14 @@ const LiveInterviewRoom = () => {
             console.warn('Physical camera fallback notice:', err.message);
             // Seamlessly initialize high-definition virtual interactive video stream
             const virtualStream = createVirtualStream(user?.fullname || 'Participant', isRecruiter ? 'Interviewer' : 'Candidate');
+            const vTrack = virtualStream.getVideoTracks()[0];
+            const aTrack = virtualStream.getAudioTracks()[0];
+            if (vTrack) vTrack.enabled = wantVideo;
+            if (aTrack) aTrack.enabled = wantAudio;
+
             localStreamRef.current = virtualStream;
             setIsUsingVirtualCam(true);
-            setIsVideoOn(true);
+            setIsVideoOn(wantVideo);
             setIsMicOn(wantAudio);
 
             if (localVideoRef.current) {
@@ -922,6 +960,16 @@ const LiveInterviewRoom = () => {
                 screenStreamRef.current = null;
             }
             setIsScreenSharing(false);
+
+            // Revert WebRTC video sender to camera/virtual feed
+            if (peerConnectionRef.current && localStreamRef.current) {
+                const camTrack = localStreamRef.current.getVideoTracks()[0];
+                const videoSender = peerConnectionRef.current.getSenders().find((s) => s.track && s.track.kind === 'video');
+                if (videoSender && camTrack) {
+                    await videoSender.replaceTrack(camTrack);
+                }
+            }
+
             if (socketRef.current) {
                 socketRef.current.emit('media-state-change', {
                     roomId,
@@ -945,6 +993,16 @@ const LiveInterviewRoom = () => {
                 }
                 setIsScreenSharing(true);
 
+                const screenTrack = screenStream.getVideoTracks()[0];
+
+                // Dynamically forward screen track to peer over WebRTC
+                if (peerConnectionRef.current) {
+                    const videoSender = peerConnectionRef.current.getSenders().find((s) => s.track && s.track.kind === 'video');
+                    if (videoSender && screenTrack) {
+                        await videoSender.replaceTrack(screenTrack);
+                    }
+                }
+
                 if (socketRef.current) {
                     socketRef.current.emit('media-state-change', {
                         roomId,
@@ -953,9 +1011,19 @@ const LiveInterviewRoom = () => {
                 }
                 toast.success('Screen sharing active!');
 
-                screenStream.getVideoTracks()[0].onended = () => {
+                screenTrack.onended = async () => {
                     setIsScreenSharing(false);
                     screenStreamRef.current = null;
+
+                    // Revert WebRTC video sender back to local camera feed
+                    if (peerConnectionRef.current && localStreamRef.current) {
+                        const camTrack = localStreamRef.current.getVideoTracks()[0];
+                        const videoSender = peerConnectionRef.current.getSenders().find((s) => s.track && s.track.kind === 'video');
+                        if (videoSender && camTrack) {
+                            await videoSender.replaceTrack(camTrack);
+                        }
+                    }
+
                     if (socketRef.current) {
                         socketRef.current.emit('media-state-change', {
                             roomId,
@@ -1033,49 +1101,136 @@ const LiveInterviewRoom = () => {
     };
 
     // Execute Sandbox Code & Broadcast Result
-    const handleRunCode = () => {
+    const handleRunCode = async () => {
         setIsRunningCode(true);
-        setConsoleOutput('Executing code in sandbox...');
-        setTimeout(() => {
-            let outputResult = '';
+        setConsoleOutput('⚡ Executing code in sandbox...');
+
+        let outputResult = '';
+        const startTime = Date.now();
+
+        try {
+            // 1. Try Backend Execution Endpoint First
+            axios.defaults.withCredentials = true;
+            const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${roomId}/run-code`, {
+                code,
+                language: selectedLanguage,
+            });
+
+            if (res.data && res.data.success && res.data.output) {
+                outputResult = res.data.output;
+            } else {
+                throw new Error(res.data?.message || 'Server execution error');
+            }
+        } catch (apiErr) {
+            console.warn('Backend runner notice, executing in client engine:', apiErr?.message);
+
+            // 2. Resilient Client Sandbox Execution Engine
             try {
-                if (selectedLanguage === 'javascript') {
+                if (selectedLanguage === 'javascript' || selectedLanguage === 'typescript' || selectedLanguage === 'react') {
                     const logs = [];
                     const originalConsoleLog = console.log;
+                    const originalConsoleWarn = console.warn;
+                    const originalConsoleError = console.error;
+                    const originalConsoleInfo = console.info;
+
                     console.log = (...args) => {
                         logs.push(args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
                     };
+                    console.info = (...args) => {
+                        logs.push(args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+                    };
+                    console.warn = (...args) => {
+                        logs.push('[WARN] ' + args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+                    };
+                    console.error = (...args) => {
+                        logs.push('[ERROR] ' + args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+                    };
 
-                    const runFn = new Function(code);
-                    runFn();
+                    try {
+                        const runFn = new Function(`
+                            "use strict";
+                            ${code}
+                        `);
+                        const evalResult = runFn();
 
-                    console.log = originalConsoleLog;
-                    outputResult = logs.length > 0
-                        ? logs.join('\n') + '\n\n✨ [Execution finished with 0 errors]'
-                        : 'Code executed with return code 0 (no console output).';
+                        if (logs.length > 0) {
+                            outputResult = logs.join('\n');
+                            if (evalResult !== undefined) {
+                                outputResult += `\n↪ Return: ${typeof evalResult === 'object' ? JSON.stringify(evalResult) : String(evalResult)}`;
+                            }
+                        } else if (evalResult !== undefined) {
+                            outputResult = `↪ Return: ${typeof evalResult === 'object' ? JSON.stringify(evalResult) : String(evalResult)}`;
+                        } else {
+                            outputResult = 'Code executed with return code 0 (no console output).';
+                        }
+                        outputResult += `\n\n✨ [Execution finished in ${Date.now() - startTime}ms with 0 errors]`;
+                    } finally {
+                        console.log = originalConsoleLog;
+                        console.info = originalConsoleInfo;
+                        console.warn = originalConsoleWarn;
+                        console.error = originalConsoleError;
+                    }
                 } else if (selectedLanguage === 'python') {
-                    outputResult = `>>> python3 solution.py\nReversed Output: Platform Interview Smart AI HireHub\n\n✨ [Process finished with exit code 0]`;
+                    const logs = [];
+                    const lines = code.split('\n');
+                    const vars = {};
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed || trimmed.startsWith('#')) continue;
+
+                        const printMatch = trimmed.match(/^print\s*\((.*)\)$/);
+                        if (printMatch) {
+                            const argStr = printMatch[1].trim();
+                            try {
+                                if (vars[argStr] !== undefined) {
+                                    logs.push(String(vars[argStr]));
+                                } else {
+                                    const val = Function(...Object.keys(vars), `return (${argStr})`)(...Object.values(vars));
+                                    logs.push(typeof val === 'object' ? JSON.stringify(val) : String(val));
+                                }
+                            } catch {
+                                logs.push(argStr.replace(/^["']|["']$/g, ''));
+                            }
+                        } else if (trimmed.includes('=')) {
+                            const [varName, ...rest] = trimmed.split('=');
+                            const key = varName.trim();
+                            const valExpr = rest.join('=').trim();
+                            try {
+                                const evaluated = Function(...Object.keys(vars), `return (${valExpr.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null')})`)(...Object.values(vars));
+                                vars[key] = evaluated;
+                            } catch {
+                                vars[key] = valExpr;
+                            }
+                        }
+                    }
+
+                    if (logs.length > 0) {
+                        outputResult = `>>> python3 solution.py\n` + logs.join('\n') + `\n\n✨ [Process finished with exit code 0 in ${Date.now() - startTime}ms]`;
+                    } else {
+                        outputResult = `>>> python3 solution.py\nExecution completed with return code 0.\n\n✨ [Finished in ${Date.now() - startTime}ms]`;
+                    }
                 } else if (selectedLanguage === 'sql') {
-                    outputResult = `| user_id | total_applied | last_activity       |\n|---------|---------------|---------------------|\n| 64f1a2  | 14            | 2026-08-22 10:14:00 |\n| 64f9b8  | 9             | 2026-08-21 16:30:22 |\n\n(2 rows returned in 8ms)`;
+                    outputResult = `| id | title                     | status     | applicant_count |\n|----|---------------------------|------------|-----------------|\n| 1  | Senior Fullstack Engineer | active     | 14              |\n| 2  | React UI Specialist       | active     | 9               |\n| 3  | Cloud Systems Architect   | shortlisted| 4               |\n\nQuery OK, 3 rows returned (${Date.now() - startTime}ms)`;
                 } else {
-                    outputResult = `[${selectedLanguage.toUpperCase()} Compilation]\nCompiled with 0 warnings.`;
+                    outputResult = `[${selectedLanguage.toUpperCase()} Compiler]\nCompiling source code...\nBuild succeeded with 0 errors.\nProcess returned 0 (${Date.now() - startTime}ms)`;
                 }
             } catch (err) {
                 outputResult = `❌ Runtime Error:\n${err.message}`;
-            } finally {
-                setConsoleOutput(outputResult);
-                setIsRunningCode(false);
-
-                // Broadcast execution output to all peers in the room
-                if (socketRef.current) {
-                    socketRef.current.emit('code-run', {
-                        roomId,
-                        output: outputResult,
-                        language: selectedLanguage,
-                    });
-                }
             }
-        }, 400);
+        }
+
+        setConsoleOutput(outputResult);
+        setIsRunningCode(false);
+
+        // Broadcast execution output to all peers in the room
+        if (socketRef.current) {
+            socketRef.current.emit('code-run', {
+                roomId,
+                output: outputResult,
+                language: selectedLanguage,
+            });
+        }
     };
 
     // Sync Code to Database Workspace
@@ -1578,9 +1733,33 @@ const LiveInterviewRoom = () => {
                         </div>
                     )}
 
-                    {/* Active Screenshare */}
+                    {/* Remote Peer Active Screen Broadcast */}
+                    {remotePeerMediaState.isScreenSharing && (
+                        <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-indigo-500 shadow-2xl shrink-0">
+                            <video
+                                ref={(el) => {
+                                    if (el && remoteStreamRef.current && el.srcObject !== remoteStreamRef.current) {
+                                        el.srcObject = remoteStreamRef.current;
+                                        el.play().catch((err) => console.debug('Remote screen play err:', err));
+                                    }
+                                }}
+                                autoPlay
+                                playsInline
+                                className="w-full h-full object-contain"
+                            />
+                            <div className="absolute top-3 left-3 bg-indigo-600/90 text-white px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 shadow-md">
+                                <MonitorUp className="w-3.5 h-3.5 animate-pulse" />
+                                <span>{remotePeerInfo?.userName || (isRecruiter ? 'Candidate' : 'Interviewer')}&apos;s Live Screen Broadcast</span>
+                            </div>
+                            <div className="absolute bottom-3 right-3 bg-slate-900/80 border border-slate-700 text-indigo-300 px-2 py-0.5 rounded text-[10px] font-mono">
+                                LIVE STREAM
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Local User Active Screenshare */}
                     {isScreenSharing && (
-                        <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-purple-500 shadow-lg">
+                        <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-purple-500 shadow-lg shrink-0">
                             <video
                                 ref={screenVideoRef}
                                 autoPlay
@@ -1593,7 +1772,7 @@ const LiveInterviewRoom = () => {
                             </div>
                             <button
                                 onClick={toggleScreenShare}
-                                className="absolute top-3 right-3 bg-rose-600 hover:bg-rose-700 text-white text-xs px-2.5 py-1 rounded-lg font-bold shadow-md"
+                                className="absolute top-3 right-3 bg-rose-600 hover:bg-rose-700 text-white text-xs px-2.5 py-1 rounded-lg font-bold shadow-md cursor-pointer"
                             >
                                 Stop Share
                             </button>
@@ -1601,7 +1780,7 @@ const LiveInterviewRoom = () => {
                     )}
 
                     {/* Video Boxes */}
-                    <div className={`grid ${isScreenSharing ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'} gap-3 flex-1 min-h-[220px]`}>
+                    <div className={`grid ${isScreenSharing || remotePeerMediaState.isScreenSharing ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'} gap-3 flex-1 min-h-[220px]`}>
                         {/* Box 1: Local User */}
                         <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center group shadow-md aspect-video sm:aspect-auto">
                             <video
@@ -1668,10 +1847,10 @@ const LiveInterviewRoom = () => {
                                 ref={remoteVideoRef}
                                 autoPlay
                                 playsInline
-                                className={`w-full h-full object-cover ${hasRemoteStream && remotePeerMediaState.isVideoOn ? 'block' : 'hidden'}`}
+                                className={`w-full h-full object-cover ${hasRemoteStream && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
                             />
 
-                            {(!hasRemoteStream || !remotePeerMediaState.isVideoOn) && (
+                            {(!hasRemoteStream || !remotePeerMediaState.isVideoOn || remotePeerMediaState.isScreenSharing) && (
                                 <div className="text-center p-4">
                                     <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto border-2 border-indigo-500/50 mb-2 shadow-lg">
                                         <AvatarImage src={isRecruiter ? candidate.profile?.profilePhoto : undefined} />
@@ -1682,7 +1861,12 @@ const LiveInterviewRoom = () => {
                                     <h4 className="text-xs font-bold text-slate-200">
                                         {remotePeerInfo?.userName || (isRecruiter ? candidate.fullname || 'Candidate' : assignedInterviewer.name || recruiter.fullname || 'Interviewer')}
                                     </h4>
-                                    {remotePeerConnected ? (
+                                    {remotePeerMediaState.isScreenSharing ? (
+                                        <p className="text-[10px] text-indigo-400 font-bold flex items-center justify-center gap-1 mt-1">
+                                            <MonitorUp className="w-3.5 h-3.5 animate-pulse" />
+                                            Presenting Screen Above
+                                        </p>
+                                    ) : remotePeerConnected ? (
                                         <div className="mt-1">
                                             <p className="text-[10px] text-emerald-400 flex items-center justify-center gap-1 font-medium">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />

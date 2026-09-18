@@ -15,6 +15,7 @@ import {
     updateSubUser,
     deleteSubUser,
     generateAIQuestions,
+    executeCodeRunner,
 } from "../controllers/interview.controller.js";
 
 const router = express.Router();
@@ -31,6 +32,7 @@ router.route("/sub-users/:subUserId").put(isAuthenticated, updateSubUser).delete
 router.route("/room/:roomId").get(isAuthenticated, getInterviewRoom);
 router.route("/room/:roomId/status").post(isAuthenticated, updateInterviewStatus);
 router.route("/room/:roomId/workspace").post(isAuthenticated, updateRoomWorkspace);
+router.route("/room/:roomId/run-code").post(isAuthenticated, executeCodeRunner);
 router.route("/room/:roomId/evaluate").post(isAuthenticated, submitEvaluation);
 router.route("/room/:roomId/finalize-decision").post(isAuthenticated, finalizeRecruiterDecision);
 router.route("/room/:roomId/inspection").post(isAuthenticated, logRecruiterInspection);
