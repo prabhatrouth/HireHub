@@ -239,15 +239,15 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
     return (
         <div className="space-y-6">
             {/* Top filter tabs & Stats */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-                <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 sm:flex-wrap scrollbar-none">
                     {[
                         { key: 'ALL', label: 'All Interviews', count: interviews.length },
                         { key: 'UPCOMING', label: 'Upcoming', count: interviews.filter((i) => i.status === 'scheduled').length },
                         { key: 'LIVE', label: 'Today / Live', count: interviews.filter((i) => i.status === 'live' || isToday(i.interviewDate)).length },
                         {
                             key: 'PENDING_REVIEW',
-                            label: 'Pending Recruiter Review',
+                            label: 'Pending Review',
                             count: interviews.filter((i) => i.status === 'completed' && i.panelistReport?.isSubmitted && !i.recruiterFinalDecision?.isFinalized).length,
                             hideForStudent: true,
                         },
@@ -258,7 +258,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                             <button
                                 key={tab.key}
                                 onClick={() => setActiveFilter(tab.key)}
-                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeFilter === tab.key
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${activeFilter === tab.key
                                     ? 'bg-[#6A38C2] text-white shadow-xs'
                                     : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
                                     }`}
@@ -274,15 +274,15 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                         ))}
                 </div>
 
-                <div className="flex items-center gap-2 self-end sm:self-auto">
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={fetchInterviews}
-                        className="text-xs h-9 rounded-xl border-slate-200 text-slate-600 gap-1"
+                        className="text-xs h-8 sm:h-9 rounded-xl border-slate-200 text-slate-600 gap-1 cursor-pointer"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh
+                        <span className="hidden sm:inline">Refresh</span>
                     </Button>
                 </div>
             </div>
@@ -319,7 +319,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                         return (
                             <div
                                 key={item._id || item.roomId}
-                                className={`bg-white rounded-2xl border transition-all p-5 sm:p-6 shadow-xs hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-5 ${isLiveNow
+                                className={`bg-white rounded-2xl border transition-all p-3.5 sm:p-5 md:p-6 shadow-xs hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-5 ${isLiveNow
                                     ? 'border-rose-300 ring-2 ring-rose-500/10'
                                     : isCompleted
                                         ? 'border-slate-200 bg-slate-50/40'
@@ -327,20 +327,20 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                     }`}
                             >
                                 {/* Left Section: Candidate / Job / Time */}
-                                <div className="flex items-start gap-4">
-                                    <Avatar className="h-12 w-12 rounded-2xl border border-slate-200 bg-purple-50 text-[#6A38C2] font-black shrink-0">
+                                <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+                                    <Avatar className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl border border-slate-200 bg-purple-50 text-[#6A38C2] font-black shrink-0">
                                         <AvatarFallback>
                                             {item.candidate?.fullname?.charAt(0) || 'C'}
                                         </AvatarFallback>
                                     </Avatar>
 
-                                    <div className="space-y-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <h3 className="font-extrabold text-slate-900 text-base">
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                            <h3 className="font-extrabold text-slate-900 text-sm sm:text-base truncate max-w-[150px] sm:max-w-none">
                                                 {item.candidate?.fullname || 'Candidate'}
                                             </h3>
                                             <span className="text-xs text-slate-400">•</span>
-                                            <span className="text-xs font-semibold text-slate-600">
+                                            <span className="text-xs font-semibold text-slate-600 truncate max-w-[130px] sm:max-w-none">
                                                 {item.job?.title || 'Engineering Role'}
                                             </span>
 
@@ -360,13 +360,13 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                             )}
 
                                             {/* Round Badge */}
-                                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                                            <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
                                                 {item.roundType || 'Technical Round'}
                                             </span>
                                         </div>
 
                                         {/* Date, Time & Company */}
-                                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-0.5">
+                                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-500 pt-0.5">
                                             <span className="flex items-center gap-1 font-medium text-slate-700">
                                                 <Calendar className="w-3.5 h-3.5 text-purple-600" />
                                                 {item.interviewDate || 'Upcoming'}
@@ -382,7 +382,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                         </div>
 
                                         {/* Assigned Panelist / Recruiter Tag */}
-                                        <div className="pt-1 flex flex-wrap items-center gap-2 text-xs">
+                                        <div className="pt-1 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
                                             {isAssignedToOther ? (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 font-semibold text-[11px]">
                                                     <Shield className="w-3 h-3 text-indigo-600" />
@@ -412,16 +412,16 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                 </div>
 
                                 {/* Right Section: Action Buttons */}
-                                <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0">
+                                <div className="flex items-center gap-2 w-full md:w-auto pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-100 shrink-0">
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() => copyLink(item.roomId)}
-                                        className="h-9 px-3 rounded-xl text-xs border-slate-200 text-slate-600 hover:text-slate-900 gap-1.5"
+                                        className="h-9 px-2.5 sm:px-3 rounded-xl text-xs border-slate-200 text-slate-600 hover:text-slate-900 gap-1.5 shrink-0 cursor-pointer"
                                         title="Copy Meeting Link"
                                     >
                                         <Copy className="w-3.5 h-3.5" />
-                                        Copy Link
+                                        <span className="hidden sm:inline">Copy Link</span>
                                     </Button>
 
                                     {/* Action based on role & status */}
@@ -431,10 +431,10 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => setSelectedScorecardInterview(item)}
-                                                className="h-9 px-3.5 rounded-xl text-xs border-purple-200 text-[#6A38C2] hover:bg-purple-50 font-bold gap-1.5"
+                                                className="flex-1 sm:flex-initial h-9 px-3 sm:px-3.5 rounded-xl text-xs border-purple-200 text-[#6A38C2] hover:bg-purple-50 font-bold gap-1.5 cursor-pointer"
                                             >
                                                 <FileText className="w-3.5 h-3.5" />
-                                                View Scorecard
+                                                <span>Scorecard</span>
                                             </Button>
 
                                             {/* If Master Recruiter and report submitted, allow final decision */}
@@ -442,10 +442,10 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                                 <Button
                                                     size="sm"
                                                     onClick={() => handleOpenFinalizeModal(item)}
-                                                    className="h-9 px-4 rounded-xl text-xs bg-gradient-to-r from-[#6A38C2] to-indigo-600 hover:from-[#582da5] hover:to-indigo-700 text-white font-bold shadow-md gap-1.5 animate-pulse"
+                                                    className="flex-1 sm:flex-initial h-9 px-3 sm:px-4 rounded-xl text-xs bg-gradient-to-r from-[#6A38C2] to-indigo-600 hover:from-[#582da5] hover:to-indigo-700 text-white font-bold shadow-md gap-1.5 animate-pulse cursor-pointer"
                                                 >
                                                     <Award className="w-3.5 h-3.5" />
-                                                    Finalize Decision
+                                                    <span>Finalize</span>
                                                 </Button>
                                             )}
                                         </>
@@ -455,7 +455,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                             <Button
                                                 size="sm"
                                                 onClick={() => navigate(`/interview/room/${item.roomId}`)}
-                                                className={`h-9 px-4 rounded-xl text-xs font-bold shadow-sm gap-1.5 ${
+                                                className={`flex-1 sm:flex-initial h-9 px-3.5 sm:px-4 rounded-xl text-xs font-bold shadow-sm gap-1.5 cursor-pointer ${
                                                     isRecruiter && !isSubUser && isAssignedToOther
                                                         ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                                                         : isLiveNow
@@ -464,11 +464,13 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                                 }`}
                                             >
                                                 <Video className="w-3.5 h-3.5" />
-                                                {isRecruiter && !isSubUser && isAssignedToOther
-                                                    ? 'Join / Inspect Live'
-                                                    : !isRecruiter
-                                                    ? 'Attend & Join Interview'
-                                                    : 'Enter Meeting Room'}
+                                                <span>
+                                                    {isRecruiter && !isSubUser && isAssignedToOther
+                                                        ? 'Inspect Live'
+                                                        : !isRecruiter
+                                                        ? 'Attend Interview'
+                                                        : 'Enter Room'}
+                                                </span>
                                             </Button>
 
                                             {/* Quick complete modal if interviewer */}
@@ -477,10 +479,10 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() => handleOpenEvaluateModal(item)}
-                                                    className="h-9 px-3 rounded-xl text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold gap-1"
+                                                    className="h-9 px-2.5 sm:px-3 rounded-xl text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold gap-1 shrink-0 cursor-pointer"
                                                 >
                                                     <CheckCircle2 className="w-3.5 h-3.5" />
-                                                    Score
+                                                    <span>Score</span>
                                                 </Button>
                                             )}
                                         </>
@@ -494,7 +496,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
 
             {/* Technical Panelist / Quick Evaluation Modal */}
             <Dialog open={Boolean(evaluatingInterview)} onOpenChange={() => setEvaluatingInterview(null)}>
-                <DialogContent className="max-w-xl rounded-3xl border-slate-200 p-6 max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[95vw] sm:max-w-xl rounded-2xl sm:rounded-3xl border-slate-200 p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <div className="w-10 h-10 rounded-2xl bg-purple-100 text-[#6A38C2] flex items-center justify-center font-bold mb-2">
                             <Award className="w-5 h-5" />
@@ -632,7 +634,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
 
             {/* Master Recruiter Final Decision Modal */}
             <Dialog open={Boolean(finalizingInterview)} onOpenChange={() => setFinalizingInterview(null)}>
-                <DialogContent className="max-w-xl rounded-3xl border-purple-200 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[95vw] sm:max-w-xl rounded-2xl sm:rounded-3xl border-purple-200 bg-white p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#6A38C2] to-indigo-600 text-white flex items-center justify-center font-bold mb-2 shadow-md">
                             <Award className="w-6 h-6" />
@@ -755,7 +757,7 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
 
             {/* Scorecard Viewer Modal */}
             <Dialog open={Boolean(selectedScorecardInterview)} onOpenChange={() => setSelectedScorecardInterview(null)}>
-                <DialogContent className="max-w-2xl rounded-3xl border-slate-200 p-6 max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[95vw] sm:max-w-2xl rounded-2xl sm:rounded-3xl border-slate-200 p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold mb-2">
                             <CheckCircle2 className="w-6 h-6" />

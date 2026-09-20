@@ -56,22 +56,22 @@ const InterviewAlertBanner = () => {
 
     return (
         <div
-            className={`w-full text-white px-4 py-2.5 shadow-md flex items-center justify-between gap-3 text-xs z-50 sticky top-0 transition-colors ${
+            className={`w-full text-white px-2.5 sm:px-4 py-2 sm:py-2.5 shadow-md flex items-center justify-between gap-2 sm:gap-3 text-xs z-50 sticky top-0 transition-colors ${
                 isLive
                     ? 'bg-gradient-to-r from-rose-600 via-purple-700 to-indigo-700 animate-pulse'
                     : 'bg-gradient-to-r from-purple-800 via-indigo-900 to-slate-900'
             }`}
         >
-            <div className="flex items-center gap-2.5 max-w-4xl truncate">
-                <div className={`p-1.5 rounded-full ${isLive ? 'bg-white text-rose-600' : 'bg-purple-500/30 text-purple-200'}`}>
-                    <Video className="w-4 h-4" />
+            <div className="flex items-center gap-2 max-w-4xl truncate min-w-0">
+                <div className={`p-1 sm:p-1.5 rounded-full shrink-0 ${isLive ? 'bg-white text-rose-600' : 'bg-purple-500/30 text-purple-200'}`}>
+                    <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
-                <div className="truncate">
+                <div className="truncate text-[11px] sm:text-xs">
                     <span className="font-extrabold uppercase tracking-wide">
-                        {isLive ? '🔴 Live Interview In Progress: ' : '🔔 Upcoming Interview Today: '}
+                        {isLive ? '🔴 Live: ' : '🔔 Today: '}
                     </span>
                     <span className="font-semibold text-purple-100">
-                        {currentInterview.job?.title || 'Technical Interview'}
+                        {currentInterview.job?.title || 'Interview'}
                     </span>
                     <span className="text-purple-200 hidden sm:inline ml-1">
                         ({currentInterview.roundType} at {currentInterview.interviewTime})
@@ -79,19 +79,20 @@ const InterviewAlertBanner = () => {
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <Button
                     size="sm"
                     onClick={() => navigate(`/interview/room/${currentInterview.roomId}`)}
-                    className={`h-7 px-3 text-xs font-extrabold shadow-sm gap-1 ${
+                    className={`h-7 px-2.5 sm:px-3 text-[11px] sm:text-xs font-extrabold shadow-sm gap-1 ${
                         isLive
                             ? 'bg-white text-rose-700 hover:bg-rose-50'
                             : 'bg-[#6A38C2] hover:bg-[#582ea8] text-white border border-purple-400'
                     }`}
                 >
                     <Video className="w-3 h-3" />
-                    <span>{isLive ? 'JOIN LIVE CALL NOW' : 'Enter Meeting Room'}</span>
-                    <ArrowRight className="w-3 h-3" />
+                    <span className="hidden xs:inline">{isLive ? 'JOIN LIVE' : 'Enter Room'}</span>
+                    <span className="xs:hidden">Join</span>
+                    <ArrowRight className="w-3 h-3 hidden xs:inline" />
                 </Button>
 
                 <button
