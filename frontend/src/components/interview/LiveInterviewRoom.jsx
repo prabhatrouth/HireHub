@@ -155,10 +155,6 @@ const LiveInterviewRoom = () => {
     const lastLocalKeystrokeRef = useRef(0);
     const remotePeerSocketIdRef = useRef(null);
     const virtualStreamStopRef = useRef(null);
-    const simulatedStreamRef = useRef(null);
-    const simulatedStopRef = useRef(null);
-    const simulatedScreenStreamRef = useRef(null);
-    const [isSimulatedPartnerActive, setIsSimulatedPartnerActive] = useState(false);
     const [audioBlockedByBrowser, setAudioBlockedByBrowser] = useState(false);
 
     // WebRTC STUN Configuration
@@ -199,7 +195,7 @@ const LiveInterviewRoom = () => {
                 }
             });
         }
-    }, [hasRemoteStream, remotePeerMediaState.isVideoOn, isSimulatedPartnerActive]);
+    }, [hasRemoteStream, remotePeerMediaState.isVideoOn]);
 
     useEffect(() => {
         if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
@@ -835,7 +831,6 @@ const LiveInterviewRoom = () => {
                 isMicOn: peerData.isMicOn ?? true,
                 isScreenSharing: false,
             });
-            toast.info(`${peerData.userName} joined the room! Connecting live video...`);
 
             // Fallback handshake: if peer doesn't send offer within 2.5 seconds, initiate from this side
             setTimeout(() => {
@@ -987,7 +982,6 @@ const LiveInterviewRoom = () => {
             if (remoteVideoRef.current) {
                 remoteVideoRef.current.srcObject = null;
             }
-            toast.info(`${userName || 'Participant'} has disconnected from the room.`);
         });
 
         // Log inspection if applicable
@@ -1034,85 +1028,6 @@ const LiveInterviewRoom = () => {
         toast.success(nextUseVirtual ? 'Switched to Virtual HD Cam' : 'Switched to Physical Webcam');
     };
 
-    // Toggle Simulated Test Partner for live two-way video & screen share testing when solo
-    const toggleSimulatedPartner = () => {
-        if (isSimulatedPartnerActive) {
-            if (simulatedStopRef.current) {
-                simulatedStopRef.current();
-                simulatedStopRef.current = null;
-            }
-            if (simulatedScreenStreamRef.current?._cleanup) {
-                simulatedScreenStreamRef.current._cleanup();
-                simulatedScreenStreamRef.current = null;
-            }
-            simulatedStreamRef.current = null;
-            setIsSimulatedPartnerActive(false);
-            if (!remotePeerConnected) {
-                setHasRemoteStream(false);
-                if (remoteVideoRef.current) {
-                    remoteVideoRef.current.srcObject = null;
-                }
-                if (remoteScreenVideoRef.current) {
-                    remoteScreenVideoRef.current.srcObject = null;
-                }
-            }
-            toast.info('Test interview partner disconnected.');
-        } else {
-            const partnerName = isRecruiter
-                ? (candidate.fullname || 'Alex Rivera (Applicant)')
-                : (assignedInterviewer.name || recruiter.fullname || 'Sarah Chen (Lead Interviewer)');
-            const partnerRole = isRecruiter ? 'Full Stack Candidate' : 'Lead Engineering Panelist';
-            const simStream = createVirtualStream(partnerName, partnerRole);
-            simulatedStreamRef.current = simStream;
-            remoteStreamRef.current = simStream;
-            setIsSimulatedPartnerActive(true);
-            setHasRemoteStream(true);
-            setRemotePeerInfo({
-                userName: partnerName,
-                userRole: isRecruiter ? 'candidate' : 'panelist',
-                userId: 'simulated-partner-id',
-            });
-            setRemotePeerMediaState({
-                isVideoOn: true,
-                isMicOn: true,
-                isScreenSharing: false,
-            });
-
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = simStream;
-                remoteVideoRef.current.play().catch(console.debug);
-            }
-            toast.success(`Connected test ${isRecruiter ? 'Candidate' : 'Interviewer'} feed for dual-video testing!`);
-        }
-    };
-
-    // Toggle simulated partner's screen share (allows user to test seeing other's screen)
-    const toggleSimulatedPartnerScreenShare = () => {
-        if (!isSimulatedPartnerActive) return;
-        if (remotePeerMediaState.isScreenSharing) {
-            // Revert back to partner's camera stream
-            if (simulatedScreenStreamRef.current?._cleanup) {
-                simulatedScreenStreamRef.current._cleanup();
-                simulatedScreenStreamRef.current = null;
-            }
-            remoteStreamRef.current = simulatedStreamRef.current;
-            setRemotePeerMediaState((prev) => ({ ...prev, isScreenSharing: false }));
-            if (remoteVideoRef.current && simulatedStreamRef.current) {
-                remoteVideoRef.current.srcObject = simulatedStreamRef.current;
-                remoteVideoRef.current.play().catch(console.debug);
-            }
-            toast.info('Test partner stopped broadcasting their screen.');
-        } else {
-            const partnerName = isRecruiter
-                ? (candidate.fullname || 'Alex Rivera')
-                : (assignedInterviewer.name || recruiter.fullname || 'Sarah Chen');
-            const partnerScreenStream = createVirtualScreenStream(partnerName);
-            simulatedScreenStreamRef.current = partnerScreenStream;
-            remoteStreamRef.current = partnerScreenStream;
-            setRemotePeerMediaState((prev) => ({ ...prev, isScreenSharing: true }));
-            toast.success(`${partnerName} is now sharing their screen!`);
-        }
-    };
 
     // Virtual HD Screen Stream for presentation broadcast if browser/iframe blocks getDisplayMedia
     const createVirtualScreenStream = (broadcasterName = null) => {
@@ -1233,15 +1148,8 @@ const LiveInterviewRoom = () => {
                 if (screenStreamRef.current._cleanup) screenStreamRef.current._cleanup();
                 screenStreamRef.current.getTracks().forEach((track) => track.stop());
             }
-            if (simulatedScreenStreamRef.current) {
-                if (simulatedScreenStreamRef.current._cleanup) simulatedScreenStreamRef.current._cleanup();
-                simulatedScreenStreamRef.current.getTracks().forEach((track) => track.stop());
-            }
             if (virtualStreamStopRef.current) {
                 virtualStreamStopRef.current();
-            }
-            if (simulatedStopRef.current) {
-                simulatedStopRef.current();
             }
             if (peerConnectionRef.current) {
                 peerConnectionRef.current.close();
@@ -2337,49 +2245,19 @@ const LiveInterviewRoom = () => {
                                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                                                 Waiting for {isRecruiter ? 'Candidate' : 'Interviewer'} to join...
                                             </p>
-                                            <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
-                                                <Button
-                                                    size="sm"
-                                                    onClick={toggleSimulatedPartner}
-                                                    className="h-7 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-2.5 shadow-sm gap-1 cursor-pointer"
-                                                >
-                                                    <Sparkles className="w-3 h-3" />
-                                                    <span>Connect Test {isRecruiter ? 'Candidate' : 'Interviewer'}</span>
-                                                </Button>
+                                            <div className="flex items-center justify-center pt-1">
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={copyRoomLink}
-                                                    className="h-7 text-[10px] font-semibold border-slate-700 hover:bg-slate-800 text-slate-300 rounded-lg px-2 gap-1 cursor-pointer"
+                                                    className="h-7 text-[10px] font-semibold border-slate-700 hover:bg-slate-800 text-slate-300 rounded-lg px-2.5 gap-1.5 cursor-pointer"
                                                 >
-                                                    <Copy className="w-3 h-3" />
+                                                    <Copy className="w-3 h-3 text-indigo-400" />
                                                     <span>Copy Link</span>
                                                 </Button>
                                             </div>
                                         </div>
                                     )}
-                                </div>
-                            )}
-
-                            {/* Simulated Test Partner Controls */}
-                            {isSimulatedPartnerActive && (
-                                <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
-                                    <button
-                                        onClick={toggleSimulatedPartnerScreenShare}
-                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md cursor-pointer transition-colors ${remotePeerMediaState.isScreenSharing ? 'bg-purple-600 text-white' : 'bg-slate-900/90 border border-purple-500/50 hover:bg-purple-900/50 text-purple-200'}`}
-                                        title="Simulate remote partner sharing their screen"
-                                    >
-                                        <MonitorUp className="w-3 h-3" />
-                                        <span>{remotePeerMediaState.isScreenSharing ? 'Stop Partner Screen' : 'Partner Screen'}</span>
-                                    </button>
-                                    <button
-                                        onClick={toggleSimulatedPartner}
-                                        className="bg-slate-900/90 border border-rose-500/50 hover:bg-rose-900/60 text-rose-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md cursor-pointer"
-                                        title="Disconnect simulated test stream"
-                                    >
-                                        <PhoneOff className="w-3 h-3 text-rose-400" />
-                                        <span>Disconnect</span>
-                                    </button>
                                 </div>
                             )}
 
