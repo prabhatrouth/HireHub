@@ -1702,6 +1702,9 @@ const LiveInterviewRoom = () => {
         setSubmittingEvaluation(true);
         try {
             axios.defaults.withCredentials = true;
+            const computedDecision = panelistRecommendation === 'Strong Hire' ? 'Strong Hire' : ['No Hire', 'Leaning No Hire'].includes(panelistRecommendation) ? 'Reject' : 'Hire';
+            const targetAppStatus = computedDecision === 'Reject' ? 'rejected' : ['Strong Hire', 'Hire'].includes(computedDecision) ? 'accepted' : 'pending';
+
             const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${roomId}/evaluate`, {
                 technicalScore,
                 problemSolvingScore,
@@ -1712,7 +1715,8 @@ const LiveInterviewRoom = () => {
                 panelistRecommendation,
                 detailedNotes,
                 isRecruiterDirectFinalize: isRecruiterSelfConducted || isMasterRecruiter,
-                finalDecision: panelistRecommendation === 'Strong Hire' ? 'Strong Hire' : panelistRecommendation === 'No Hire' ? 'Reject' : 'Hire',
+                finalDecision: computedDecision,
+                advanceApplicationStatus: targetAppStatus,
             });
 
             if (res.data?.success) {
@@ -1736,10 +1740,12 @@ const LiveInterviewRoom = () => {
         setSubmittingFinalDecision(true);
         try {
             axios.defaults.withCredentials = true;
+            const targetAppStatus = recruiterFinalDecision === 'Reject' ? 'rejected' : ['Hire', 'Strong Hire'].includes(recruiterFinalDecision) ? 'accepted' : 'pending';
+
             const res = await axios.post(`${INTERVIEW_API_END_POINT}/room/${roomId}/finalize-decision`, {
                 finalDecision: recruiterFinalDecision,
                 finalRemarks: recruiterFinalRemarks,
-                advanceApplicationStatus: recruiterFinalDecision === 'Hire' ? 'accepted' : recruiterFinalDecision === 'Reject' ? 'rejected' : 'shortlisted',
+                advanceApplicationStatus: targetAppStatus,
             });
 
             if (res.data?.success) {
@@ -2676,6 +2682,26 @@ const LiveInterviewRoom = () => {
                                                 <option value="On Hold">⏸️ On Hold</option>
                                                 <option value="Reject">❌ Reject Application</option>
                                             </select>
+
+                                            {/* Auto-Sync status badge */}
+                                            <div className={`mt-2 p-2 rounded-lg border text-[11px] flex items-center gap-1.5 ${
+                                                recruiterFinalDecision === 'Reject'
+                                                    ? 'bg-red-950/60 border-red-800/80 text-red-300'
+                                                    : ['Hire', 'Strong Hire'].includes(recruiterFinalDecision)
+                                                    ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-300'
+                                                    : 'bg-blue-950/60 border-blue-800/80 text-blue-300'
+                                            }`}>
+                                                <span>⚡</span>
+                                                <span>
+                                                    {recruiterFinalDecision === 'Reject' ? (
+                                                        <>Auto-Sync: Candidate application will automatically be updated to <strong className="text-red-200">Rejected</strong>.</>
+                                                    ) : ['Hire', 'Strong Hire'].includes(recruiterFinalDecision) ? (
+                                                        <>Auto-Sync: Candidate application will automatically be updated to <strong className="text-emerald-200">Accepted</strong>.</>
+                                                    ) : (
+                                                        <>Auto-Sync: Application stays active under review.</>
+                                                    )}
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <div>

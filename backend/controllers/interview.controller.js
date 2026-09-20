@@ -15,6 +15,88 @@ const getGeminiClient = () => {
     return new GoogleGenAI({ apiKey });
 };
 
+// Robust helper to reliably synchronize candidate Application status automatically when an interview decision or evaluation is submitted
+export const syncApplicationStatusFromInterview = async ({ interview, explicitStatus, decision, recommendation }) => {
+    try {
+        let targetStatus = explicitStatus ? String(explicitStatus).toLowerCase().trim() : null;
+
+        const rejectKeywords = ["reject", "no hire", "leaning no hire", "rejected", "declined"];
+        const acceptKeywords = ["hire", "strong hire", "accepted", "offer", "hired"];
+
+        if (!targetStatus || targetStatus === "pending" || targetStatus === "shortlisted" || targetStatus === "under review") {
+            const dec = String(decision || "").toLowerCase();
+            const rec = String(recommendation || "").toLowerCase();
+
+            if (rejectKeywords.some((k) => dec.includes(k)) || rejectKeywords.some((k) => rec.includes(k))) {
+                targetStatus = "rejected";
+            } else if (acceptKeywords.some((k) => dec.includes(k)) || acceptKeywords.some((k) => rec.includes(k))) {
+                targetStatus = "accepted";
+            }
+        }
+
+        // Schema only permits: 'pending' | 'accepted' | 'rejected'
+        if (!targetStatus || !["pending", "accepted", "rejected"].includes(targetStatus)) {
+            if (targetStatus === "shortlisted" || targetStatus === "under review") {
+                targetStatus = "pending";
+            } else {
+                return null;
+            }
+        }
+
+        const jobId = interview?.job?._id || interview?.job;
+        const candidateId = interview?.candidate?._id || interview?.candidate;
+        let appId = interview?.application?._id || interview?.application;
+
+        if (isDbConnected()) {
+            let appDoc = null;
+            if (appId) {
+                appDoc = await Application.findById(appId);
+            }
+            if (!appDoc && jobId && candidateId) {
+                appDoc = await Application.findOne({
+                    job: jobId,
+                    applicant: candidateId,
+                });
+                if (appDoc && !interview.application) {
+                    interview.application = appDoc._id;
+                    await interview.save();
+                }
+            }
+
+            if (appDoc) {
+                appDoc.status = targetStatus;
+                await appDoc.save();
+                console.log(`[HireHub Auto-Status Sync] Application ${appDoc._id} status automatically updated to: ${targetStatus}`);
+                return targetStatus;
+            }
+        } else {
+            // In-Memory mockStore fallback
+            let mockApp = null;
+            if (appId) {
+                mockApp = (mockStore.applications || []).find((a) => String(a._id) === String(appId));
+            }
+            if (!mockApp && jobId && candidateId) {
+                mockApp = (mockStore.applications || []).find(
+                    (a) => String(a.job?._id || a.job) === String(jobId) &&
+                           String(a.applicant?._id || a.applicant) === String(candidateId)
+                );
+                if (mockApp && !interview.application) {
+                    interview.application = mockApp._id;
+                }
+            }
+
+            if (mockApp) {
+                mockApp.status = targetStatus;
+                console.log(`[HireHub Auto-Status Sync (Mock)] Application ${mockApp._id} status automatically updated to: ${targetStatus}`);
+                return targetStatus;
+            }
+        }
+    } catch (err) {
+        console.error("Auto Application Status Sync error:", err);
+    }
+    return null;
+};
+
 // 1. Schedule a new interview
 export const scheduleInterview = async (req, res) => {
     try {
@@ -58,9 +140,18 @@ export const scheduleInterview = async (req, res) => {
                 return res.status(404).json({ message: "Candidate profile not found.", success: false });
             }
 
+            // Auto-resolve application reference if not explicitly passed
+            let resolvedApplicationId = applicationId;
+            if (!resolvedApplicationId) {
+                const existingApp = await Application.findOne({ job: jobId, applicant: candidateId });
+                if (existingApp) {
+                    resolvedApplicationId = existingApp._id;
+                }
+            }
+
             const newInterview = await Interview.create({
                 job: jobId,
-                application: applicationId || undefined,
+                application: resolvedApplicationId || undefined,
                 candidate: candidateId,
                 recruiter: recruiterId,
                 company: job.company,
@@ -108,9 +199,19 @@ export const scheduleInterview = async (req, res) => {
             const candidate = mockStore.users.find((u) => String(u._id) === String(candidateId)) || mockStore.users[0];
             const recruiter = mockStore.users.find((u) => String(u._id) === String(recruiterId)) || mockStore.users[2];
 
+            let resolvedAppId = applicationId;
+            if (!resolvedAppId) {
+                const existingApp = (mockStore.applications || []).find(
+                    (a) => String(a.job?._id || a.job) === String(jobId) &&
+                           String(a.applicant?._id || a.applicant) === String(candidateId)
+                );
+                if (existingApp) resolvedAppId = existingApp._id;
+            }
+
             const mockNewInterview = {
                 _id: `interview_${Date.now()}`,
                 job,
+                application: resolvedAppId || undefined,
                 candidate,
                 recruiter,
                 company: job?.company || mockStore.companies[0],
@@ -554,8 +655,9 @@ export const submitEvaluation = async (req, res) => {
             interview.status = "completed";
 
             // If master recruiter self-conducted the interview OR explicitly finalized:
+            let decisionToSet = null;
             if (isRecruiterDirectFinalize || interview.interviewerType === "recruiter" || isMasterRecruiter) {
-                const decisionToSet = finalDecision || (
+                decisionToSet = finalDecision || (
                     ["Strong Hire", "Hire"].includes(panelistRecommendation) ? "Hire" :
                     ["No Hire", "Leaning No Hire"].includes(panelistRecommendation) ? "Reject" :
                     panelistRecommendation === "Advance to Next Round" ? "Advance to Next Round" : "Hire"
@@ -575,12 +677,13 @@ export const submitEvaluation = async (req, res) => {
 
             await interview.save();
 
-            // Advance application status if specified
-            if (advanceApplicationStatus && interview.application) {
-                await Application.findByIdAndUpdate(interview.application, {
-                    status: advanceApplicationStatus,
-                });
-            }
+            // Automatically synchronize application status (rejected / accepted / pending)
+            await syncApplicationStatusFromInterview({
+                interview,
+                explicitStatus: advanceApplicationStatus,
+                decision: decisionToSet || finalDecision,
+                recommendation: panelistRecommendation,
+            });
 
             const updatedInterview = await Interview.findById(interview._id)
                 .populate("candidate", "fullname email phoneNumber profile")
@@ -605,10 +708,17 @@ export const submitEvaluation = async (req, res) => {
             interview.evaluation = evaluationData;
             interview.status = "completed";
 
+            let mockDecisionToSet = null;
             if (isRecruiterDirectFinalize || interview.interviewerType === "recruiter" || isMasterRecruiter) {
+                mockDecisionToSet = finalDecision || (
+                    ["Strong Hire", "Hire"].includes(panelistRecommendation) ? "Hire" :
+                    ["No Hire", "Leaning No Hire"].includes(panelistRecommendation) ? "Reject" :
+                    panelistRecommendation === "Advance to Next Round" ? "Advance to Next Round" : "Hire"
+                );
+
                 interview.recruiterFinalDecision = {
                     isFinalized: true,
-                    finalDecision: finalDecision || "Hire",
+                    finalDecision: mockDecisionToSet,
                     finalRemarks: finalRemarks || `Finalized directly: ${detailedNotes}`,
                     finalizedBy: {
                         name: currentUser?.fullname || "Lead Recruiter",
@@ -617,6 +727,14 @@ export const submitEvaluation = async (req, res) => {
                     finalizedAt: new Date().toISOString(),
                 };
             }
+
+            // Automatically sync mockStore application status
+            await syncApplicationStatusFromInterview({
+                interview,
+                explicitStatus: advanceApplicationStatus,
+                decision: mockDecisionToSet || finalDecision,
+                recommendation: panelistRecommendation,
+            });
 
             return res.status(200).json({
                 message: isRecruiterDirectFinalize || interview.interviewerType === "recruiter"
@@ -687,11 +805,13 @@ export const finalizeRecruiterDecision = async (req, res) => {
             }
             await interview.save();
 
-            if (advanceApplicationStatus && interview.application) {
-                await Application.findByIdAndUpdate(interview.application, {
-                    status: advanceApplicationStatus,
-                });
-            }
+            // Automatically sync application status to rejected / accepted / pending
+            await syncApplicationStatusFromInterview({
+                interview,
+                explicitStatus: advanceApplicationStatus,
+                decision: finalDecision,
+                recommendation: "",
+            });
 
             const updatedInterview = await Interview.findById(interview._id)
                 .populate("candidate", "fullname email phoneNumber profile")
@@ -712,6 +832,14 @@ export const finalizeRecruiterDecision = async (req, res) => {
 
             interview.recruiterFinalDecision = finalDecisionData;
             interview.status = "completed";
+
+            // Automatically sync mockStore application status
+            await syncApplicationStatusFromInterview({
+                interview,
+                explicitStatus: advanceApplicationStatus,
+                decision: finalDecision,
+                recommendation: "",
+            });
 
             return res.status(200).json({
                 message: `Final hiring decision recorded as: ${finalDecision}!`,
@@ -806,11 +934,13 @@ export const completeInterview = async (req, res) => {
             }
             await interview.save();
 
-            if (advanceApplicationStatus && interview.application) {
-                await Application.findByIdAndUpdate(interview.application, {
-                    status: advanceApplicationStatus,
-                });
-            }
+            // Automatically synchronize application status
+            await syncApplicationStatusFromInterview({
+                interview,
+                explicitStatus: advanceApplicationStatus,
+                decision: hiringDecision,
+                recommendation: "",
+            });
 
             const updatedInterview = await Interview.findById(interview._id)
                 .populate("candidate", "fullname email phoneNumber profile")
@@ -830,6 +960,15 @@ export const completeInterview = async (req, res) => {
             }
             interview.status = "completed";
             if (hiringDecision) interview.evaluation.hiringDecision = hiringDecision;
+
+            // Automatically sync mockStore application status
+            await syncApplicationStatusFromInterview({
+                interview,
+                explicitStatus: advanceApplicationStatus,
+                decision: hiringDecision,
+                recommendation: "",
+            });
+
             return res.status(200).json({
                 message: "Interview marked as completed successfully.",
                 success: true,

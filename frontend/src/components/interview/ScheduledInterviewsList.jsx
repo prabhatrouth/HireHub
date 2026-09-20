@@ -181,13 +181,15 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
     const handleOpenFinalizeModal = (item) => {
         setFinalizingInterview(item);
         const report = item.panelistReport || {};
-        const rec = report.panelistRecommendation;
+        const rec = report.panelistRecommendation || '';
         const defaultDecision = ['Strong Hire', 'Hire'].includes(rec) ? 'Hire' : ['No Hire', 'Leaning No Hire'].includes(rec) ? 'Reject' : 'Advance to Next Round';
+        const initialDecision = item.recruiterFinalDecision?.finalDecision || defaultDecision;
+        const autoStatus = initialDecision === 'Reject' ? 'rejected' : ['Hire', 'Strong Hire'].includes(initialDecision) ? 'accepted' : 'pending';
 
         setFinalForm({
-            finalDecision: item.recruiterFinalDecision?.finalDecision || defaultDecision,
+            finalDecision: initialDecision,
             finalRemarks: item.recruiterFinalDecision?.finalRemarks || '',
-            advanceApplicationStatus: defaultDecision === 'Hire' ? 'accepted' : defaultDecision === 'Reject' ? 'rejected' : 'shortlisted',
+            advanceApplicationStatus: autoStatus,
             scheduleNextRound: Boolean(item.recruiterFinalDecision?.nextRoundScheduled),
             nextRoundType: item.recruiterFinalDecision?.nextRoundType || 'Executive Founder Round',
         });
@@ -673,7 +675,15 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                 <Label className="text-xs font-bold text-slate-900">Recruiter Final Decision *</Label>
                                 <select
                                     value={finalForm.finalDecision}
-                                    onChange={(e) => setFinalForm({ ...finalForm, finalDecision: e.target.value })}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        const autoStatus = val === 'Reject' ? 'rejected' : ['Hire', 'Strong Hire'].includes(val) ? 'accepted' : 'pending';
+                                        setFinalForm({
+                                            ...finalForm,
+                                            finalDecision: val,
+                                            advanceApplicationStatus: autoStatus,
+                                        });
+                                    }}
                                     className="w-full mt-1.5 h-11 px-3 bg-white border-2 border-purple-200 rounded-xl text-sm font-extrabold text-slate-900 focus:ring-2 focus:ring-purple-500/20"
                                 >
                                     <option value="Hire">🎉 Hire Candidate (Extend Offer)</option>
@@ -682,6 +692,32 @@ const ScheduledInterviewsList = ({ roleFilter }) => {
                                     <option value="On Hold">⏸️ On Hold (Evaluate against remaining candidates)</option>
                                     <option value="Reject">❌ Reject Application</option>
                                 </select>
+                                
+                                {/* Real-time Auto-Sync Status Banner */}
+                                <div className={`mt-2 p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                                    finalForm.finalDecision === 'Reject'
+                                        ? 'bg-red-50 border-red-200 text-red-700'
+                                        : ['Hire', 'Strong Hire'].includes(finalForm.finalDecision)
+                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                        : 'bg-blue-50 border-blue-200 text-blue-700'
+                                }`}>
+                                    <span className="font-bold text-sm">⚡</span>
+                                    <span>
+                                        {finalForm.finalDecision === 'Reject' ? (
+                                            <>
+                                                <strong>Automatic Status Sync:</strong> Application status will automatically switch to <span className="underline font-bold">Rejected</span> in the applicants pipeline without manual re-adding.
+                                            </>
+                                        ) : ['Hire', 'Strong Hire'].includes(finalForm.finalDecision) ? (
+                                            <>
+                                                <strong>Automatic Status Sync:</strong> Application status will automatically switch to <span className="underline font-bold">Accepted</span> in the applicants pipeline without manual re-adding.
+                                            </>
+                                        ) : (
+                                            <>
+                                                <strong>Automatic Status Sync:</strong> Candidate will remain active under review for subsequent rounds.
+                                            </>
+                                        )}
+                                    </span>
+                                </div>
                             </div>
 
                             <div>

@@ -1,6 +1,7 @@
 import { Application } from "../models/application.model.js";
 import { Job } from "../models/job.model.js";
 import { User } from "../models/user.model.js";
+import { Interview } from "../models/interview.model.js";
 import { mockStore } from "../utils/mockStore.js";
 import mongoose from "mongoose";
 
@@ -96,7 +97,7 @@ export const getAppliedJobs = async (req, res) => {
         const userId = req.id;
 
         if (isDbConnected()) {
-            const application = await Application.find({ applicant: userId })
+            const applications = await Application.find({ applicant: userId })
                 .sort({ createdAt: -1 })
                 .populate({
                     path: "job",
@@ -107,8 +108,34 @@ export const getAppliedJobs = async (req, res) => {
                     },
                 });
 
+            // Auto-heal status if interview outcome exists
+            if (applications && applications.length > 0) {
+                for (let app of applications) {
+                    if (app && app.status === "pending" && app.job) {
+                        const interview = await Interview.findOne({
+                            job: app.job._id || app.job,
+                            candidate: userId,
+                            status: "completed",
+                        }).sort({ updatedAt: -1 });
+
+                        if (interview) {
+                            const dec = String(interview.recruiterFinalDecision?.finalDecision || interview.evaluation?.hiringDecision || "").toLowerCase();
+                            const rec = String(interview.panelistReport?.panelistRecommendation || "").toLowerCase();
+
+                            if (dec.includes("reject") || dec.includes("no hire") || rec.includes("no hire") || rec.includes("reject")) {
+                                app.status = "rejected";
+                                await Application.findByIdAndUpdate(app._id, { status: "rejected" });
+                            } else if (dec.includes("hire") || dec.includes("accepted")) {
+                                app.status = "accepted";
+                                await Application.findByIdAndUpdate(app._id, { status: "accepted" });
+                            }
+                        }
+                    }
+                }
+            }
+
             return res.status(200).json({
-                application: application || [],
+                application: applications || [],
                 success: true,
             });
         } else {
@@ -116,6 +143,25 @@ export const getAppliedJobs = async (req, res) => {
                 .filter((a) => String(a.applicant?._id || a.applicant) === String(userId))
                 .map((app) => {
                     const job = mockStore.jobs.find((j) => String(j._id) === String(app.job));
+
+                    // Auto-heal pending mock app if interview exists
+                    if (app.status === "pending") {
+                        const interview = (mockStore.interviews || []).find(
+                            (i) => String(i.job?._id || i.job) === String(app.job) &&
+                                   String(i.candidate?._id || i.candidate) === String(userId) &&
+                                   i.status === "completed"
+                        );
+                        if (interview) {
+                            const dec = String(interview.recruiterFinalDecision?.finalDecision || interview.evaluation?.hiringDecision || "").toLowerCase();
+                            const rec = String(interview.panelistReport?.panelistRecommendation || "").toLowerCase();
+                            if (dec.includes("reject") || dec.includes("no hire") || rec.includes("no hire") || rec.includes("reject")) {
+                                app.status = "rejected";
+                            } else if (dec.includes("hire") || dec.includes("accepted")) {
+                                app.status = "accepted";
+                            }
+                        }
+                    }
+
                     return {
                         ...app,
                         job: job || { title: "Applied Position", company: { name: "Company" } },
@@ -170,6 +216,34 @@ export const getApplicants = async (req, res) => {
                     success: false,
                 });
             }
+
+            // Auto-heal / sync application status if interview outcome is marked as Reject or Hire
+            if (job.applications && job.applications.length > 0) {
+                for (let app of job.applications) {
+                    if (app && app.status === "pending" && app.applicant) {
+                        const candidateId = app.applicant._id || app.applicant;
+                        const interview = await Interview.findOne({
+                            job: jobId,
+                            candidate: candidateId,
+                            status: "completed",
+                        }).sort({ updatedAt: -1 });
+
+                        if (interview) {
+                            const dec = String(interview.recruiterFinalDecision?.finalDecision || interview.evaluation?.hiringDecision || "").toLowerCase();
+                            const rec = String(interview.panelistReport?.panelistRecommendation || "").toLowerCase();
+
+                            if (dec.includes("reject") || dec.includes("no hire") || rec.includes("no hire") || rec.includes("reject")) {
+                                app.status = "rejected";
+                                await Application.findByIdAndUpdate(app._id, { status: "rejected" });
+                            } else if (dec.includes("hire") || dec.includes("accepted")) {
+                                app.status = "accepted";
+                                await Application.findByIdAndUpdate(app._id, { status: "accepted" });
+                            }
+                        }
+                    }
+                }
+            }
+
             return res.status(200).json({
                 job,
                 success: true,
@@ -189,6 +263,25 @@ export const getApplicants = async (req, res) => {
                     const applicant = typeof a.applicant === "object"
                         ? a.applicant
                         : mockStore.users.find((u) => String(u._id) === String(a.applicant)) || { fullname: "Applicant" };
+
+                    // Auto-heal status for mock store apps
+                    if (a.status === "pending") {
+                        const interview = (mockStore.interviews || []).find(
+                            (i) => String(i.job?._id || i.job) === String(jobId) &&
+                                   String(i.candidate?._id || i.candidate) === String(applicant._id || a.applicant) &&
+                                   i.status === "completed"
+                        );
+                        if (interview) {
+                            const dec = String(interview.recruiterFinalDecision?.finalDecision || interview.evaluation?.hiringDecision || "").toLowerCase();
+                            const rec = String(interview.panelistReport?.panelistRecommendation || "").toLowerCase();
+                            if (dec.includes("reject") || dec.includes("no hire") || rec.includes("no hire") || rec.includes("reject")) {
+                                a.status = "rejected";
+                            } else if (dec.includes("hire") || dec.includes("accepted")) {
+                                a.status = "accepted";
+                            }
+                        }
+                    }
+
                     return { ...a, applicant };
                 });
 
