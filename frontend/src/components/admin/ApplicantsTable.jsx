@@ -111,7 +111,7 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
         setIsAiModalOpen(true);
     };
 
-    if (loading) {
+    if (loading && (!applications || applications.length === 0)) {
         return (
             <div className="bg-white rounded-xl border border-gray-200/80 p-12 text-center shadow-sm">
                 <Sparkles className="w-8 h-8 text-purple-600 animate-pulse mx-auto mb-3" />
@@ -673,6 +673,8 @@ const ApplicantsTable = ({ applications = [], jobRequirements = [], viewMode = '
                 applicantData={interviewApplicant}
                 jobData={jobData || (interviewApplicant ? { _id: interviewApplicant.job?._id || interviewApplicant.job, title: interviewApplicant.job?.title } : null)}
                 onSuccess={() => {
+                    setIsScheduleModalOpen(false);
+                    setInterviewApplicant(null);
                     if (onStatusUpdate) onStatusUpdate();
                 }}
             />

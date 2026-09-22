@@ -33,10 +33,11 @@ import { useNavigate } from 'react-router-dom';
 const ROUND_TYPES = [
     { value: 'Initial Screening', label: 'Initial Screening & Background Review', duration: 30, icon: Users },
     { value: 'Domain Competency', label: 'Domain Competency & Subject Matter Evaluation', duration: 45, icon: Briefcase },
+    { value: 'Live Technical & Problem Solving', label: 'Live Technical & Analytical Problem Solving', duration: 60, icon: FileCode },
+    { value: 'Technical Round', label: 'Technical Round (Coding & Architecture)', duration: 45, icon: FileCode },
     { value: 'Case Study & Scenario', label: 'Case Study, Scenario & Strategy Assessment', duration: 60, icon: Sparkles },
     { value: 'Portfolio & Presentation', label: 'Portfolio, Project & Presentation Review', duration: 45, icon: Layers },
     { value: 'Sales & Client Simulation', label: 'Sales Pitch & Client Negotiation Simulation', duration: 45, icon: MessageSquare },
-    { value: 'Live Technical & Problem Solving', label: 'Live Technical & Analytical Problem Solving', duration: 60, icon: FileCode },
     { value: 'Behavioral & Cultural Fit', label: 'Behavioral & Cultural Alignment (STAR)', duration: 45, icon: MessageSquare },
     { value: 'Final Executive Round', label: 'Final Executive / Stakeholder Round', duration: 45, icon: Video },
 ];
@@ -44,10 +45,11 @@ const ROUND_TYPES = [
 const NEXT_ROUND_SUGGESTIONS = {
     'Initial Screening': 'Domain Competency',
     'Domain Competency': 'Case Study & Scenario',
+    'Live Technical & Problem Solving': 'Final Executive Round',
+    'Technical Round': 'Final Executive Round',
     'Case Study & Scenario': 'Behavioral & Cultural Fit',
     'Portfolio & Presentation': 'Final Executive Round',
     'Sales & Client Simulation': 'Behavioral & Cultural Fit',
-    'Live Technical & Problem Solving': 'Final Executive Round',
     'Behavioral & Cultural Fit': 'Final Executive Round',
     'Final Executive Round': 'Domain Competency',
 };
@@ -81,13 +83,27 @@ const ScheduleInterviewDialog = ({
 
     const [interviewDate, setInterviewDate] = useState(getTomorrowDate(1));
     const [interviewTime, setInterviewTime] = useState('14:00');
-    const [durationMinutes, setDurationMinutes] = useState(45);
-    const [roundType, setRoundType] = useState('Technical Round');
+    const [durationMinutes, setDurationMinutes] = useState(30);
+    const [roundType, setRoundType] = useState('Initial Screening');
     const [notes, setNotes] = useState(
-        'Please have a stable internet connection, camera enabled, and be prepared for live coding and discussion on recent projects.'
+        'Please have a stable internet connection, camera enabled, and be prepared for interactive evaluation.'
     );
     const [loading, setLoading] = useState(false);
     const [scheduledResult, setScheduledResult] = useState(null);
+
+    // Reset state whenever dialog opens/closes
+    useEffect(() => {
+        if (isOpen) {
+            setScheduledResult(null);
+            setInterviewDate(getTomorrowDate(1));
+            setInterviewTime('14:00');
+            setDurationMinutes(30);
+            setRoundType('Initial Screening');
+            setNotes('Please have a stable internet connection, camera enabled, and be prepared for interactive evaluation.');
+        } else {
+            setScheduledResult(null);
+        }
+    }, [isOpen]);
 
     // Interviewer delegation state
     const [interviewerType, setInterviewerType] = useState('recruiter'); // 'recruiter' | 'assigned_panelist'
@@ -206,8 +222,11 @@ const ScheduleInterviewDialog = ({
 
             if (res.data?.success) {
                 toast.success(res.data.message || `Interview scheduled successfully with ${applicant.fullname || 'candidate'}!`);
-                setScheduledResult(res.data.interview);
-                if (onSuccess) onSuccess(res.data.interview);
+                // Close dialog and reset state immediately - do not automatically open or reopen
+                handleClose();
+                if (onSuccess) {
+                    onSuccess(res.data.interview);
+                }
             }
         } catch (error) {
             console.error('Schedule interview error:', error);

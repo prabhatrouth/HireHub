@@ -54,14 +54,7 @@ const interviewSchema = new mongoose.Schema(
         roundType: {
             type: String,
             default: "Technical Round",
-            enum: [
-                "Initial Screening",
-                "Technical Round",
-                "Live Coding & DSA",
-                "System Design",
-                "Behavioral & HR Round",
-                "Final Executive Round",
-            ],
+            trim: true,
         },
         status: {
             type: String,
