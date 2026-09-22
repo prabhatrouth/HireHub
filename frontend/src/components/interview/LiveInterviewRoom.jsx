@@ -145,6 +145,7 @@ const LiveInterviewRoom = () => {
     const screenVideoRef = useRef(null);
     const lobbyVideoRef = useRef(null);
     const remoteScreenVideoRef = useRef(null);
+    const workspaceScreenVideoRef = useRef(null);
     const localStreamRef = useRef(null);
     const remoteStreamRef = useRef(null);
     const screenStreamRef = useRef(null);
@@ -228,11 +229,42 @@ const LiveInterviewRoom = () => {
         }
 
         // 3. Remote Screen Sharing Video
-        if (remoteScreenVideoRef.current && remotePeerMediaState.isScreenSharing) {
-            if (remoteScreenVideoRef.current.srcObject !== stream) {
-                remoteScreenVideoRef.current.srcObject = stream;
+        if (remotePeerMediaState.isScreenSharing) {
+            const vTracks = stream.getVideoTracks();
+            if (vTracks.length > 0) {
+                const screenStream = new MediaStream(vTracks);
+                if (remoteScreenVideoRef.current) {
+                    remoteScreenVideoRef.current.srcObject = screenStream;
+                    remoteScreenVideoRef.current.muted = true;
+                    remoteScreenVideoRef.current.play().catch((err) => {
+                        console.debug('[Screen] Remote screen play retry:', err?.name);
+                        if (remoteScreenVideoRef.current) {
+                            remoteScreenVideoRef.current.muted = true;
+                            remoteScreenVideoRef.current.play().catch(console.debug);
+                        }
+                    });
+                }
+                if (workspaceScreenVideoRef.current) {
+                    workspaceScreenVideoRef.current.srcObject = screenStream;
+                    workspaceScreenVideoRef.current.muted = true;
+                    workspaceScreenVideoRef.current.play().catch(console.debug);
+                }
             }
-            remoteScreenVideoRef.current.play().catch(console.debug);
+            // Release camera video element so Chromium doesn't throttle shared WebRTC video decoder
+            if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
+                remoteVideoRef.current.srcObject = null;
+            }
+        } else {
+            // Restore camera feed when screen sharing is inactive
+            if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
+                remoteVideoRef.current.srcObject = stream;
+                remoteVideoRef.current.play().catch((vErr) => {
+                    if (remoteVideoRef.current) {
+                        remoteVideoRef.current.muted = true;
+                        remoteVideoRef.current.play().catch(console.debug);
+                    }
+                });
+            }
         }
     };
 
@@ -279,7 +311,7 @@ const LiveInterviewRoom = () => {
         if (remoteStreamRef.current) {
             attachRemoteStreamToMediaElements();
         }
-    }, [hasRemoteStream, remotePeerMediaState.isVideoOn, remotePeerConnected]);
+    }, [hasRemoteStream, remotePeerMediaState.isVideoOn, remotePeerMediaState.isScreenSharing, remotePeerConnected]);
 
     useEffect(() => {
         if (isScreenSharing && screenVideoRef.current && screenStreamRef.current) {
@@ -289,9 +321,35 @@ const LiveInterviewRoom = () => {
     }, [isScreenSharing]);
 
     useEffect(() => {
-        if (remotePeerMediaState.isScreenSharing && remoteScreenVideoRef.current && remoteStreamRef.current) {
-            remoteScreenVideoRef.current.srcObject = remoteStreamRef.current;
-            remoteScreenVideoRef.current.play().catch((err) => console.debug('Remote screen play error:', err));
+        if (remotePeerMediaState.isScreenSharing && remoteStreamRef.current) {
+            const vTracks = remoteStreamRef.current.getVideoTracks();
+            if (vTracks.length > 0) {
+                const freshStream = new MediaStream(vTracks);
+                if (remoteScreenVideoRef.current) {
+                    remoteScreenVideoRef.current.srcObject = freshStream;
+                    remoteScreenVideoRef.current.muted = true;
+                    remoteScreenVideoRef.current.play().catch((err) => {
+                        console.debug('Remote screen play error:', err);
+                        if (remoteScreenVideoRef.current) {
+                            remoteScreenVideoRef.current.muted = true;
+                            remoteScreenVideoRef.current.play().catch(console.debug);
+                        }
+                    });
+                }
+                if (workspaceScreenVideoRef.current) {
+                    workspaceScreenVideoRef.current.srcObject = freshStream;
+                    workspaceScreenVideoRef.current.muted = true;
+                    workspaceScreenVideoRef.current.play().catch(console.debug);
+                }
+            }
+        } else if (!remotePeerMediaState.isScreenSharing && remoteStreamRef.current) {
+            if (activeWorkspaceTab === 'screen') {
+                setActiveWorkspaceTab('code');
+            }
+            if (remoteVideoRef.current) {
+                remoteVideoRef.current.srcObject = remoteStreamRef.current;
+                remoteVideoRef.current.play().catch(console.debug);
+            }
         }
     }, [remotePeerMediaState.isScreenSharing, hasRemoteStream]);
 
@@ -636,6 +694,22 @@ const LiveInterviewRoom = () => {
                     console.debug('Track add notice:', tErr);
                 }
             });
+        }
+
+        // Ensure transceivers exist for both audio and video
+        if (!pc.getSenders().some((s) => s.track?.kind === 'video')) {
+            try {
+                pc.addTransceiver('video', { direction: 'sendrecv' });
+            } catch (e) {
+                console.debug('Transceiver video notice:', e);
+            }
+        }
+        if (!pc.getSenders().some((s) => s.track?.kind === 'audio')) {
+            try {
+                pc.addTransceiver('audio', { direction: 'sendrecv' });
+            } catch (e) {
+                console.debug('Transceiver audio notice:', e);
+            }
         }
 
         // Handle incoming remote media tracks
@@ -1150,12 +1224,13 @@ const LiveInterviewRoom = () => {
         canvas.width = 1280;
         canvas.height = 720;
         canvas.style.position = 'fixed';
-        canvas.style.left = '-10000px';
+        canvas.style.left = '0';
         canvas.style.top = '0';
-        canvas.style.width = '1280px';
-        canvas.style.height = '720px';
+        canvas.style.width = '1px';
+        canvas.style.height = '1px';
+        canvas.style.opacity = '0.01';
         canvas.style.pointerEvents = 'none';
-        canvas.style.zIndex = '-999';
+        canvas.style.zIndex = '-99999';
         if (document.body) document.body.appendChild(canvas);
 
         const ctx = canvas.getContext('2d');
@@ -1346,6 +1421,7 @@ const LiveInterviewRoom = () => {
                     videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
                 }
                 if (videoSender && camTrack) {
+                    camTrack.enabled = isVideoOn;
                     await videoSender.replaceTrack(camTrack).catch(console.debug);
                 }
             }
@@ -1354,6 +1430,7 @@ const LiveInterviewRoom = () => {
                 socketRef.current.emit('media-state-change', {
                     roomId,
                     isScreenSharing: false,
+                    isVideoOn,
                 });
             }
             toast.info('Screen sharing stopped.');
@@ -1369,7 +1446,11 @@ const LiveInterviewRoom = () => {
                             audio: false,
                         });
                     } catch (displayErr) {
-                        console.warn('Native getDisplayMedia restricted or unavailable:', displayErr.message);
+                        try {
+                            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                        } catch (displayErr2) {
+                            console.warn('Native getDisplayMedia restricted or unavailable:', displayErr2.message);
+                        }
                     }
                 }
 
@@ -1391,6 +1472,9 @@ const LiveInterviewRoom = () => {
                 }
 
                 const screenTrack = screenStream.getVideoTracks()[0];
+                if (screenTrack) {
+                    screenTrack.enabled = true;
+                }
 
                 // Dynamically forward screen track to peer over WebRTC
                 if (peerConnectionRef.current && screenTrack) {
@@ -1402,6 +1486,9 @@ const LiveInterviewRoom = () => {
                         await videoSender.replaceTrack(screenTrack).catch(console.debug);
                     } else {
                         peerConnectionRef.current.addTrack(screenTrack, screenStream);
+                        if (remotePeerSocketIdRef.current) {
+                            await initiateOffer(remotePeerSocketIdRef.current);
+                        }
                     }
                 }
 
@@ -1409,6 +1496,7 @@ const LiveInterviewRoom = () => {
                     socketRef.current.emit('media-state-change', {
                         roomId,
                         isScreenSharing: true,
+                        isVideoOn: true,
                     });
                 }
 
@@ -1426,6 +1514,7 @@ const LiveInterviewRoom = () => {
                                 videoSender = peerConnectionRef.current.getSenders().find((s) => s.track === null);
                             }
                             if (videoSender && camTrack) {
+                                camTrack.enabled = isVideoOn;
                                 await videoSender.replaceTrack(camTrack).catch(console.debug);
                             }
                         }
@@ -1434,6 +1523,7 @@ const LiveInterviewRoom = () => {
                             socketRef.current.emit('media-state-change', {
                                 roomId,
                                 isScreenSharing: false,
+                                isVideoOn,
                             });
                         }
                         toast.info('Screen sharing ended.');
@@ -2267,6 +2357,24 @@ const LiveInterviewRoom = () => {
                         <span>AI</span>
                     </button>
                 )}
+
+                {remotePeerMediaState.isScreenSharing && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setMobileActiveTab('screen');
+                            setActiveWorkspaceTab('screen');
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            mobileActiveTab === 'screen'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'text-indigo-400 hover:text-white bg-slate-900/60'
+                        }`}
+                    >
+                        <MonitorUp className="w-3.5 h-3.5 animate-pulse" />
+                        <span>Screen</span>
+                    </button>
+                )}
             </div>
 
             {/* Main Stage: Video Grid (Left) & Workspace (Right) */}
@@ -2284,22 +2392,44 @@ const LiveInterviewRoom = () => {
 
                     {/* Remote Peer Active Screen Broadcast */}
                     {remotePeerMediaState.isScreenSharing && (
-                        <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-indigo-500 shadow-2xl shrink-0">
+                        <div className="relative aspect-video rounded-2xl bg-black overflow-hidden border-2 border-indigo-500 shadow-2xl shrink-0 group">
                             <video
                                 ref={(el) => {
                                     remoteScreenVideoRef.current = el;
-                                    if (el && remoteStreamRef.current && el.srcObject !== remoteStreamRef.current) {
-                                        el.srcObject = remoteStreamRef.current;
-                                        el.play().catch((err) => console.debug('Remote screen play err:', err));
+                                    if (el && remoteStreamRef.current) {
+                                        const vTracks = remoteStreamRef.current.getVideoTracks();
+                                        if (vTracks.length > 0) {
+                                            const freshStream = new MediaStream(vTracks);
+                                            if (el.srcObject !== freshStream) {
+                                                el.srcObject = freshStream;
+                                            }
+                                        }
+                                        el.muted = true;
+                                        el.play().catch((err) => {
+                                            console.debug('Remote screen play retry:', err);
+                                            el.muted = true;
+                                            el.play().catch(console.debug);
+                                        });
                                     }
                                 }}
                                 autoPlay
                                 playsInline
+                                muted
                                 className="w-full h-full object-contain"
                             />
                             <div className="absolute top-3 left-3 bg-indigo-600/90 text-white px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 shadow-md">
                                 <MonitorUp className="w-3.5 h-3.5 animate-pulse" />
-                                <span>{remotePeerInfo?.userName || (isRecruiter ? 'Candidate' : 'Interviewer')}&apos;s Live Screen Broadcast</span>
+                                <span>{remotePeerInfo?.userName || (isRecruiter ? 'Candidate' : 'Interviewer')}&apos;s Live Screen</span>
+                            </div>
+                            <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                                <button
+                                    onClick={() => setActiveWorkspaceTab('screen')}
+                                    className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-white text-[11px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                                    title="View Fullscreen in Workspace"
+                                >
+                                    <Maximize2 className="w-3 h-3 text-indigo-400" />
+                                    <span>Expand</span>
+                                </button>
                             </div>
                             <div className="absolute bottom-3 right-3 bg-slate-900/80 border border-slate-700 text-indigo-300 px-2 py-0.5 rounded text-[10px] font-mono">
                                 LIVE STREAM
@@ -2764,6 +2894,20 @@ const LiveInterviewRoom = () => {
                                     <span className="w-2 h-2 rounded-full bg-purple-400" />
                                 ) : null}
                             </button>
+
+                            {remotePeerMediaState.isScreenSharing && (
+                                <button
+                                    onClick={() => setActiveWorkspaceTab('screen')}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                                        activeWorkspaceTab === 'screen'
+                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                            : 'text-indigo-400 hover:text-white hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <MonitorUp className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                                    <span>{remotePeerInfo?.userName || (isRecruiter ? 'Candidate' : 'Interviewer')}&apos;s Screen</span>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -3240,6 +3384,55 @@ const LiveInterviewRoom = () => {
                                     <Send className="w-4 h-4" />
                                 </Button>
                             </form>
+                        </div>
+                    )}
+
+                    {/* Tab 5: Remote Screen Share Full Workspace View */}
+                    {activeWorkspaceTab === 'screen' && (
+                        <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+                            <div className="h-10 bg-slate-900 border-b border-slate-800 px-3 flex items-center justify-between gap-2 shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                                        <MonitorUp className="w-3.5 h-3.5 text-indigo-400" />
+                                        {remotePeerInfo?.userName || (isRecruiter ? 'Candidate' : 'Interviewer')}&apos;s Live Screen
+                                    </span>
+                                    <span className="text-[10px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-700/60 px-2 py-0.5 rounded">
+                                        HD 1080p
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setActiveWorkspaceTab('code')}
+                                        className="text-xs text-slate-400 hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                                    >
+                                        <Code2 className="w-3.5 h-3.5" />
+                                        <span>Back to Code</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex-1 bg-black relative flex items-center justify-center overflow-hidden p-2 sm:p-4">
+                                <video
+                                    ref={(el) => {
+                                        workspaceScreenVideoRef.current = el;
+                                        if (el && remoteStreamRef.current) {
+                                            const vTracks = remoteStreamRef.current.getVideoTracks();
+                                            if (vTracks.length > 0) {
+                                                const freshStream = new MediaStream(vTracks);
+                                                if (el.srcObject !== freshStream) {
+                                                    el.srcObject = freshStream;
+                                                }
+                                            }
+                                            el.muted = true;
+                                            el.play().catch(console.debug);
+                                        }
+                                    }}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className="w-full h-full object-contain rounded-xl shadow-2xl"
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
