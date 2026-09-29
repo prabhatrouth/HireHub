@@ -184,14 +184,27 @@ export const setupInterviewSocket = (io) => {
         });
 
         // 8. Code Execution Run Broadcast
-        socket.on("code-run", ({ roomId, output, language }) => {
+        socket.on("code-run", ({ roomId, output, isError, language }) => {
             const currentRoomId = roomId || socket.data.roomId;
             if (!currentRoomId) return;
 
             socket.to(currentRoomId).emit("code-run-result", {
                 output,
+                isError: Boolean(isError),
                 language,
                 runnerName: socket.data.userName,
+            });
+        });
+
+        // 8b. Real-time Camera Frame Relay (Bulletproof video fallback across firewalls/NAT)
+        socket.on("video-frame", ({ roomId, frameData, isVideoOn }) => {
+            const currentRoomId = roomId || socket.data.roomId;
+            if (!currentRoomId || !frameData) return;
+            socket.to(currentRoomId).emit("peer-video-frame", {
+                frameData,
+                senderSocketId: socket.id,
+                senderUserId: socket.data.userId,
+                isVideoOn: isVideoOn !== undefined ? isVideoOn : true,
             });
         });
 

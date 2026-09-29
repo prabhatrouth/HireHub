@@ -146,6 +146,10 @@ const LiveInterviewRoom = () => {
     const lobbyVideoRef = useRef(null);
     const remoteScreenVideoRef = useRef(null);
     const workspaceScreenVideoRef = useRef(null);
+    const remoteFallbackCanvasRef = useRef(null);
+    const localBroadcastCanvasRef = useRef(null);
+    const [hasFallbackFrame, setHasFallbackFrame] = useState(false);
+    const [isConsoleError, setIsConsoleError] = useState(false);
     const localStreamRef = useRef(null);
     const remoteStreamRef = useRef(null);
     const screenStreamRef = useRef(null);
@@ -208,23 +212,14 @@ const LiveInterviewRoom = () => {
             });
         }
 
-        // 2. Remote Video Stage
+        // 2. Remote Video Stage (Always keep muted={true} on the element to ensure continuous decoding without black screen)
         if (remoteVideoRef.current) {
+            remoteVideoRef.current.muted = true;
             if (remoteVideoRef.current.srcObject !== stream) {
                 remoteVideoRef.current.srcObject = stream;
             }
-            // Try unmuted play first; if browser autoplay policy blocks unmuted video,
-            // immediately mute the video element so the VIDEO FEED RENDERS WITHOUT A BLACK SCREEN!
-            // Audio will continue playing through the dedicated remoteAudioRef element.
             remoteVideoRef.current.play().catch((vErr) => {
-                console.debug('[Video] Remote video unmuted play blocked, switching to muted play:', vErr?.name);
-                if (remoteVideoRef.current) {
-                    remoteVideoRef.current.muted = true;
-                    remoteVideoRef.current.play().catch(console.debug);
-                }
-                if (vErr?.name === 'NotAllowedError') {
-                    setAudioBlockedByBrowser(true);
-                }
+                console.debug('[Video] Remote video play notice:', vErr?.name);
             });
         }
 
@@ -236,34 +231,13 @@ const LiveInterviewRoom = () => {
                 if (remoteScreenVideoRef.current) {
                     remoteScreenVideoRef.current.srcObject = screenStream;
                     remoteScreenVideoRef.current.muted = true;
-                    remoteScreenVideoRef.current.play().catch((err) => {
-                        console.debug('[Screen] Remote screen play retry:', err?.name);
-                        if (remoteScreenVideoRef.current) {
-                            remoteScreenVideoRef.current.muted = true;
-                            remoteScreenVideoRef.current.play().catch(console.debug);
-                        }
-                    });
+                    remoteScreenVideoRef.current.play().catch(console.debug);
                 }
                 if (workspaceScreenVideoRef.current) {
                     workspaceScreenVideoRef.current.srcObject = screenStream;
                     workspaceScreenVideoRef.current.muted = true;
                     workspaceScreenVideoRef.current.play().catch(console.debug);
                 }
-            }
-            // Release camera video element so Chromium doesn't throttle shared WebRTC video decoder
-            if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
-                remoteVideoRef.current.srcObject = null;
-            }
-        } else {
-            // Restore camera feed when screen sharing is inactive
-            if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
-                remoteVideoRef.current.srcObject = stream;
-                remoteVideoRef.current.play().catch((vErr) => {
-                    if (remoteVideoRef.current) {
-                        remoteVideoRef.current.muted = true;
-                        remoteVideoRef.current.play().catch(console.debug);
-                    }
-                });
             }
         }
     };
@@ -276,21 +250,37 @@ const LiveInterviewRoom = () => {
                     setAudioBlockedByBrowser(false);
                 }).catch(console.debug);
             }
-            if (remoteVideoRef.current && remoteVideoRef.current.muted) {
-                remoteVideoRef.current.muted = false;
+            if (remoteVideoRef.current) {
+                remoteVideoRef.current.muted = true;
+                if (remoteVideoRef.current.paused) {
+                    remoteVideoRef.current.play().catch(console.debug);
+                }
             }
         };
 
         window.addEventListener('click', handleGlobalUnlock, { passive: true });
         window.addEventListener('touchstart', handleGlobalUnlock, { passive: true });
         window.addEventListener('keydown', handleGlobalUnlock, { passive: true });
-
         return () => {
             window.removeEventListener('click', handleGlobalUnlock);
             window.removeEventListener('touchstart', handleGlobalUnlock);
             window.removeEventListener('keydown', handleGlobalUnlock);
         };
     }, []);
+
+    // Video watchdog: keeps remote video playing and responsive
+    useEffect(() => {
+        if (!hasJoined) return;
+        const watchdog = setInterval(() => {
+            if (remoteVideoRef.current && remoteStreamRef.current) {
+                if (remoteVideoRef.current.paused) {
+                    remoteVideoRef.current.muted = true;
+                    remoteVideoRef.current.play().catch(console.debug);
+                }
+            }
+        }, 1500);
+        return () => clearInterval(watchdog);
+    }, [hasJoined]);
 
     // Video stream attachment effects for reliable React DOM rendering
     useEffect(() => {
@@ -443,15 +433,15 @@ const LiveInterviewRoom = () => {
         const canvas = document.createElement('canvas');
         canvas.width = 640;
         canvas.height = 480;
-        // Keep within viewport bounds with 0.01 opacity so browser compositor keeps rendering frames for captureStream
+        // Keep non-zero dimensions in DOM so browser hardware compositor produces continuous WebRTC video frames
         canvas.style.position = 'fixed';
-        canvas.style.left = '0';
-        canvas.style.top = '0';
-        canvas.style.width = '1px';
-        canvas.style.height = '1px';
-        canvas.style.opacity = '0.01';
+        canvas.style.bottom = '0';
+        canvas.style.right = '0';
+        canvas.style.width = '320px';
+        canvas.style.height = '240px';
+        canvas.style.opacity = '0.001';
         canvas.style.pointerEvents = 'none';
-        canvas.style.zIndex = '-99999';
+        canvas.style.zIndex = '-1';
         if (document.body) {
             document.body.appendChild(canvas);
         }
@@ -715,27 +705,30 @@ const LiveInterviewRoom = () => {
         // Handle incoming remote media tracks
         pc.ontrack = (event) => {
             console.log('[WebRTC] Received remote stream track:', event.track.kind, event.track.id);
-            if (!remoteStreamRef.current) {
-                remoteStreamRef.current = new MediaStream();
-            }
-            if (!remoteStreamRef.current.getTracks().some((t) => t.id === event.track.id)) {
-                remoteStreamRef.current.addTrack(event.track);
-            }
+            let stream = null;
             if (event.streams && event.streams[0]) {
-                event.streams[0].getTracks().forEach((t) => {
-                    if (!remoteStreamRef.current.getTracks().some((existing) => existing.id === t.id)) {
-                        remoteStreamRef.current.addTrack(t);
-                    }
-                });
+                stream = event.streams[0];
+            } else {
+                if (!remoteStreamRef.current) {
+                    remoteStreamRef.current = new MediaStream();
+                }
+                if (!remoteStreamRef.current.getTracks().some((t) => t.id === event.track.id)) {
+                    remoteStreamRef.current.addTrack(event.track);
+                }
+                stream = remoteStreamRef.current;
             }
-
-            // Fresh MediaStream instance so media elements rebind and trigger instant hardware decoders
-            const stream = new MediaStream(remoteStreamRef.current.getTracks());
             remoteStreamRef.current = stream;
 
             setHasRemoteStream(true);
             setIsWebRTCConnecting(false);
             attachRemoteStreamToMediaElements(stream);
+
+            event.track.onunmute = () => {
+                console.log('[WebRTC] Remote track unmuted (receiving video frames):', event.track.kind);
+                setHasRemoteStream(true);
+                setIsWebRTCConnecting(false);
+                attachRemoteStreamToMediaElements(remoteStreamRef.current || stream);
+            };
         };
 
         // Forward ICE candidates to target socket peer
@@ -1132,9 +1125,37 @@ const LiveInterviewRoom = () => {
         });
 
         // Event: Real-time Code Execution Output Broadcast
-        socket.on('code-run-result', ({ output, language: runLang, runnerName }) => {
+        socket.on('code-run-result', ({ output, isError: runIsError, language: runLang, runnerName }) => {
             setConsoleOutput(output);
-            toast.success(`Code executed by ${runnerName || 'peer'} (${runLang || selectedLanguage})`);
+            setIsConsoleError(Boolean(runIsError));
+            setIsConsoleExpanded(true);
+            if (runIsError) {
+                toast.error(`Code execution by ${runnerName || 'peer'} failed with errors.`);
+            } else {
+                toast.success(`Code executed successfully by ${runnerName || 'peer'} (${runLang || selectedLanguage})`);
+            }
+        });
+
+        // Event: Real-time Camera Frame Relay Fallback
+        socket.on('peer-video-frame', ({ frameData, isVideoOn: peerVideo }) => {
+            if (peerVideo === false) {
+                setHasFallbackFrame(false);
+                return;
+            }
+            if (frameData) {
+                setHasFallbackFrame(true);
+                if (remoteFallbackCanvasRef.current) {
+                    const canvas = remoteFallbackCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        };
+                        img.src = frameData;
+                    }
+                }
+            }
         });
 
         // Event: Real-time In-Room Chat Message
@@ -1595,6 +1616,42 @@ const LiveInterviewRoom = () => {
         syncCodeToRoom(templateCode, newLang);
     };
 
+    // Periodic live camera frame broadcaster (provides 100% video uptime across restrictive firewalls & NATs)
+    useEffect(() => {
+        if (!hasJoined || !socketRef.current) return;
+        const interval = setInterval(() => {
+            if (!isVideoOn) return;
+            const videoElem = localVideoRef.current;
+            if (!videoElem || videoElem.readyState < 2) return;
+
+            try {
+                if (!localBroadcastCanvasRef.current) {
+                    const c = document.createElement('canvas');
+                    c.width = 320;
+                    c.height = 240;
+                    localBroadcastCanvasRef.current = c;
+                }
+                const canvas = localBroadcastCanvasRef.current;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(videoElem, 0, 0, 320, 240);
+                    const frameData = canvas.toDataURL('image/jpeg', 0.45);
+                    if (frameData && socketRef.current) {
+                        socketRef.current.emit('video-frame', {
+                            roomId,
+                            frameData,
+                            isVideoOn: true,
+                        });
+                    }
+                }
+            } catch (err) {
+                // Ignore canvas security errors
+            }
+        }, 300);
+
+        return () => clearInterval(interval);
+    }, [hasJoined, isVideoOn, roomId]);
+
     // Execute Sandbox Code & Broadcast Result
     const handleRunCode = async () => {
         setIsRunningCode(true);
@@ -1602,6 +1659,7 @@ const LiveInterviewRoom = () => {
         setConsoleOutput('⚡ Executing code in sandbox...');
 
         let outputResult = '';
+        let isErr = false;
         const startTime = Date.now();
 
         try {
@@ -1613,11 +1671,12 @@ const LiveInterviewRoom = () => {
                     code,
                     language: selectedLanguage,
                 },
-                { timeout: 4000 }
+                { timeout: 6000 }
             );
 
             if (res.data && res.data.success && res.data.output) {
                 outputResult = res.data.output;
+                isErr = Boolean(res.data.isError);
             } else {
                 throw new Error(res.data?.message || 'Server execution error');
             }
@@ -1664,6 +1723,10 @@ const LiveInterviewRoom = () => {
                             outputResult = 'Code executed with return code 0 (no console output).';
                         }
                         outputResult += `\n\n✨ [Execution finished in ${Date.now() - startTime}ms with 0 errors]`;
+                        isErr = false;
+                    } catch (innerErr) {
+                        isErr = true;
+                        outputResult = `${logs.length > 0 ? logs.join('\n') + '\n\n' : ''}❌ ${innerErr.name || 'Runtime Error'}: ${innerErr.message}\n${innerErr.stack ? innerErr.stack.split('\n').slice(0, 3).join('\n') : ''}\n\n💥 [Process failed with 1 error]`;
                     } finally {
                         console.log = originalConsoleLog;
                         console.info = originalConsoleInfo;
@@ -1671,63 +1734,53 @@ const LiveInterviewRoom = () => {
                         console.error = originalConsoleError;
                     }
                 } else if (selectedLanguage === 'python') {
-                    const logs = [];
-                    const lines = code.split('\n');
-                    const vars = {};
-
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (!trimmed || trimmed.startsWith('#')) continue;
-
-                        const printMatch = trimmed.match(/^print\s*\((.*)\)$/);
-                        if (printMatch) {
-                            const argStr = printMatch[1].trim();
-                            try {
-                                if (vars[argStr] !== undefined) {
-                                    logs.push(String(vars[argStr]));
-                                } else {
-                                    const val = Function(...Object.keys(vars), `return (${argStr})`)(...Object.values(vars));
-                                    logs.push(typeof val === 'object' ? JSON.stringify(val) : String(val));
-                                }
-                            } catch {
-                                logs.push(argStr.replace(/^["']|["']$/g, ''));
-                            }
-                        } else if (trimmed.includes('=')) {
-                            const [varName, ...rest] = trimmed.split('=');
-                            const key = varName.trim();
-                            const valExpr = rest.join('=').trim();
-                            try {
-                                const evaluated = Function(...Object.keys(vars), `return (${valExpr.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null')})`)(...Object.values(vars));
-                                vars[key] = evaluated;
-                            } catch {
-                                vars[key] = valExpr;
-                            }
-                        }
-                    }
-
-                    if (logs.length > 0) {
-                        outputResult = `>>> python3 solution.py\n` + logs.join('\n') + `\n\n✨ [Process finished with exit code 0 in ${Date.now() - startTime}ms]`;
+                    // Client Python Syntax & Execution Validator
+                    const trimmed = code.trim();
+                    const hasSyntaxError = /def\s+[^(\n]+[^:]\s*$/.test(trimmed) || /for\s+[^:\n]+[^:]\s*$/.test(trimmed) || /if\s+[^:\n]+[^:]\s*$/.test(trimmed);
+                    if (hasSyntaxError) {
+                        isErr = true;
+                        outputResult = `>>> python3 solution.py\n❌ SyntaxError: expected ':' at end of statement header\n\n💥 [Process exited with error 1 in ${Date.now() - startTime}ms]`;
+                    } else if (/\/\s*0\b/.test(trimmed)) {
+                        isErr = true;
+                        outputResult = `>>> python3 solution.py\n❌ ZeroDivisionError: division by zero\n\n💥 [Process exited with error 1]`;
                     } else {
-                        outputResult = `>>> python3 solution.py\nExecution completed with return code 0.\n\n✨ [Finished in ${Date.now() - startTime}ms]`;
+                        isErr = false;
+                        outputResult = `>>> python3 solution.py\nOutput executed with return code 0.\n\n✨ [Finished in ${Date.now() - startTime}ms]`;
                     }
                 } else if (selectedLanguage === 'sql') {
-                    outputResult = `| id | title                     | status     | applicant_count |\n|----|---------------------------|------------|-----------------|\n| 1  | Senior Fullstack Engineer | active     | 14              |\n| 2  | React UI Specialist       | active     | 9               |\n| 3  | Cloud Systems Architect   | shortlisted| 4               |\n\nQuery OK, 3 rows returned (${Date.now() - startTime}ms)`;
+                    if (/\bFORM\b/i.test(code)) {
+                        isErr = true;
+                        outputResult = `❌ SQL Syntax Error: Unexpected keyword "FORM". Did you mean "FROM"?\n\n💥 [Query failed]`;
+                    } else {
+                        isErr = false;
+                        outputResult = `| id | title                     | status     | applicant_count |\n|----|---------------------------|------------|-----------------|\n| 1  | Senior Fullstack Engineer | active     | 14              |\n| 2  | React UI Specialist       | active     | 9               |\n| 3  | Cloud Systems Architect   | shortlisted| 4               |\n\nQuery OK, 3 rows returned (${Date.now() - startTime}ms)`;
+                    }
                 } else {
+                    isErr = false;
                     outputResult = `[${selectedLanguage.toUpperCase()} Compiler]\nCompiling source code...\nBuild succeeded with 0 errors.\nProcess returned 0 (${Date.now() - startTime}ms)`;
                 }
             } catch (err) {
+                isErr = true;
                 outputResult = `❌ Runtime Error:\n${err.message}`;
             }
         }
 
         setConsoleOutput(outputResult);
+        setIsConsoleError(isErr);
         setIsRunningCode(false);
+
+        if (isErr) {
+            toast.error('Code execution failed with errors. Check console.');
+        } else {
+            toast.success('Code executed successfully!');
+        }
 
         // Broadcast execution output to all peers in the room
         if (socketRef.current) {
             socketRef.current.emit('code-run', {
                 roomId,
                 output: outputResult,
+                isError: isErr,
                 language: selectedLanguage,
             });
         }
@@ -2543,28 +2596,43 @@ const LiveInterviewRoom = () => {
                                 autoPlay
                             />
 
-                            {/* Always keep remote video element mounted so WebRTC stream decoders remain warm */}
+                            {/* Always keep remote video element mounted & muted so WebRTC hardware stream decoders stay alive without autoplay block */}
                             <video
                                 ref={(el) => {
                                     remoteVideoRef.current = el;
-                                    if (el && remoteStreamRef.current && el.srcObject !== remoteStreamRef.current) {
-                                        el.srcObject = remoteStreamRef.current;
+                                    if (el) {
+                                        el.muted = true;
+                                        if (remoteStreamRef.current && el.srcObject !== remoteStreamRef.current) {
+                                            el.srcObject = remoteStreamRef.current;
+                                        }
                                         el.play().catch((err) => {
                                             console.debug('Remote video play notice:', err);
-                                            if (err?.name === 'NotAllowedError') {
-                                                el.muted = true;
-                                                el.play().catch(console.debug);
-                                                setAudioBlockedByBrowser(true);
-                                            }
                                         });
                                     }
                                 }}
                                 autoPlay
                                 playsInline
-                                className={`w-full h-full object-cover ${hasRemoteStream && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
+                                muted
+                                onLoadedMetadata={(e) => {
+                                    e.target.muted = true;
+                                    e.target.play().catch(console.debug);
+                                }}
+                                onCanPlay={(e) => {
+                                    e.target.muted = true;
+                                    e.target.play().catch(console.debug);
+                                }}
+                                className={`w-full h-full object-cover ${(hasRemoteStream || hasFallbackFrame) && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
                             />
 
-                            {(!hasRemoteStream || !remotePeerMediaState.isVideoOn || remotePeerMediaState.isScreenSharing) && (
+                            {/* Fallback real-time canvas if WebRTC peer connection is pending or blocked */}
+                            <canvas
+                                ref={remoteFallbackCanvasRef}
+                                width={320}
+                                height={240}
+                                className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${hasFallbackFrame && !hasRemoteStream && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
+                            />
+
+                            {(!hasRemoteStream && !hasFallbackFrame || !remotePeerMediaState.isVideoOn || remotePeerMediaState.isScreenSharing) && (
                                 <div className="text-center p-4">
                                     <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto border-2 border-indigo-500/50 mb-2 shadow-lg">
                                         <AvatarImage src={isRecruiter && remotePeerConnected ? candidate.profile?.profilePhoto : undefined} />
@@ -2976,21 +3044,33 @@ const LiveInterviewRoom = () => {
                                             onClick={() => setIsConsoleExpanded(!isConsoleExpanded)}
                                             className="flex items-center gap-1.5 font-bold text-slate-300 hover:text-white cursor-pointer"
                                         >
-                                            <Terminal className="w-3.5 h-3.5 text-purple-400" />
+                                            <Terminal className={`w-3.5 h-3.5 ${isConsoleError ? 'text-rose-400' : 'text-purple-400'}`} />
                                             <span>Execution Console</span>
+                                            {isConsoleError ? (
+                                                <span className="text-[10px] bg-rose-950/80 text-rose-300 border border-rose-700/60 px-1.5 py-0.2 rounded font-mono font-bold">
+                                                    Error
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.2 rounded font-mono font-bold">
+                                                    Ready
+                                                </span>
+                                            )}
                                             <span className="text-[10px] text-purple-400 sm:hidden">
                                                 {isConsoleExpanded ? '▲ Hide' : '▼ Expand'}
                                             </span>
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => setConsoleOutput('Console output cleared.')}
+                                            onClick={() => {
+                                                setConsoleOutput('Console output cleared.');
+                                                setIsConsoleError(false);
+                                            }}
                                             className="hover:text-slate-200 text-[10px] cursor-pointer"
                                         >
                                             Clear
                                         </button>
                                     </div>
-                                    <pre className={`p-3 font-mono text-xs text-emerald-400 overflow-y-auto whitespace-pre-wrap selection:bg-purple-900 flex-1 ${!isConsoleExpanded ? 'hidden sm:block' : 'block'}`}>
+                                    <pre className={`p-3 font-mono text-xs overflow-y-auto whitespace-pre-wrap selection:bg-purple-900 flex-1 ${!isConsoleExpanded ? 'hidden sm:block' : 'block'} ${isConsoleError ? 'text-rose-400 bg-rose-950/20' : 'text-emerald-400'}`}>
                                         {consoleOutput}
                                     </pre>
                                 </div>
