@@ -147,8 +147,14 @@ const LiveInterviewRoom = () => {
     const remoteScreenVideoRef = useRef(null);
     const workspaceScreenVideoRef = useRef(null);
     const remoteFallbackCanvasRef = useRef(null);
+    const workspaceScreenCanvasRef = useRef(null);
     const localBroadcastCanvasRef = useRef(null);
+    const localScreenBroadcastCanvasRef = useRef(null);
+    const activeVirtualCanvasRef = useRef(null);
+    const activeVirtualScreenCanvasRef = useRef(null);
     const [hasFallbackFrame, setHasFallbackFrame] = useState(false);
+    const [hasScreenFrame, setHasScreenFrame] = useState(false);
+    const [isWebRtcVideoRendering, setIsWebRtcVideoRendering] = useState(false);
     const [isConsoleError, setIsConsoleError] = useState(false);
     const localStreamRef = useRef(null);
     const remoteStreamRef = useRef(null);
@@ -445,6 +451,7 @@ const LiveInterviewRoom = () => {
         if (document.body) {
             document.body.appendChild(canvas);
         }
+        activeVirtualCanvasRef.current = canvas;
 
         const ctx = canvas.getContext('2d');
         let frame = 0;
@@ -562,6 +569,7 @@ const LiveInterviewRoom = () => {
             if (animId) cancelAnimationFrame(animId);
             if (intervalId) clearInterval(intervalId);
             if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+            if (activeVirtualCanvasRef.current === canvas) activeVirtualCanvasRef.current = null;
         };
 
         stream._cleanup = cleanup;
@@ -1096,12 +1104,21 @@ const LiveInterviewRoom = () => {
 
         // Event: Peer Media State Changed (Camera, Mic, Screen)
         socket.on('participant-media-state', ({ isVideoOn: peerVideo, isMicOn: peerMic, isScreenSharing: peerScreen }) => {
-            setRemotePeerMediaState((prev) => ({
-                ...prev,
-                ...(peerVideo !== undefined ? { isVideoOn: peerVideo } : {}),
-                ...(peerMic !== undefined ? { isMicOn: peerMic } : {}),
-                ...(peerScreen !== undefined ? { isScreenSharing: peerScreen } : {}),
-            }));
+            setRemotePeerMediaState((prev) => {
+                if (peerScreen === true && !prev.isScreenSharing) {
+                    setActiveWorkspaceTab('screen');
+                    toast.info('Remote participant started sharing their screen.');
+                } else if (peerScreen === false && prev.isScreenSharing) {
+                    setActiveWorkspaceTab('code');
+                    toast.info('Screen sharing ended.');
+                }
+                return {
+                    ...prev,
+                    ...(peerVideo !== undefined ? { isVideoOn: peerVideo } : {}),
+                    ...(peerMic !== undefined ? { isMicOn: peerMic } : {}),
+                    ...(peerScreen !== undefined ? { isScreenSharing: peerScreen } : {}),
+                };
+            });
         });
 
         // Event: Real-time Live Code Synchronization
@@ -1146,6 +1163,28 @@ const LiveInterviewRoom = () => {
                 setHasFallbackFrame(true);
                 if (remoteFallbackCanvasRef.current) {
                     const canvas = remoteFallbackCanvasRef.current;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        };
+                        img.src = frameData;
+                    }
+                }
+            }
+        });
+
+        // Event: Real-time Screen Share Frame Relay Fallback
+        socket.on('peer-screen-frame', ({ frameData, isScreenSharing: peerScreen }) => {
+            if (peerScreen === false) {
+                setHasScreenFrame(false);
+                return;
+            }
+            if (frameData) {
+                setHasScreenFrame(true);
+                if (workspaceScreenCanvasRef.current) {
+                    const canvas = workspaceScreenCanvasRef.current;
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         const img = new Image();
@@ -1245,14 +1284,15 @@ const LiveInterviewRoom = () => {
         canvas.width = 1280;
         canvas.height = 720;
         canvas.style.position = 'fixed';
-        canvas.style.left = '0';
-        canvas.style.top = '0';
-        canvas.style.width = '1px';
-        canvas.style.height = '1px';
-        canvas.style.opacity = '0.01';
+        canvas.style.bottom = '0';
+        canvas.style.right = '0';
+        canvas.style.width = '320px';
+        canvas.style.height = '180px';
+        canvas.style.opacity = '0.001';
         canvas.style.pointerEvents = 'none';
-        canvas.style.zIndex = '-99999';
+        canvas.style.zIndex = '-1';
         if (document.body) document.body.appendChild(canvas);
+        activeVirtualScreenCanvasRef.current = canvas;
 
         const ctx = canvas.getContext('2d');
         let frame = 0;
@@ -1344,6 +1384,7 @@ const LiveInterviewRoom = () => {
             if (animId) cancelAnimationFrame(animId);
             if (intervalId) clearInterval(intervalId);
             if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+            if (activeVirtualScreenCanvasRef.current === canvas) activeVirtualScreenCanvasRef.current = null;
         };
         return stream;
     };
@@ -1616,41 +1657,87 @@ const LiveInterviewRoom = () => {
         syncCodeToRoom(templateCode, newLang);
     };
 
-    // Periodic live camera frame broadcaster (provides 100% video uptime across restrictive firewalls & NATs)
+    // Periodic live camera & screen share frame broadcaster (100% video uptime across firewalls/NAT)
     useEffect(() => {
         if (!hasJoined || !socketRef.current) return;
         const interval = setInterval(() => {
-            if (!isVideoOn) return;
-            const videoElem = localVideoRef.current;
-            if (!videoElem || videoElem.readyState < 2) return;
-
-            try {
-                if (!localBroadcastCanvasRef.current) {
-                    const c = document.createElement('canvas');
-                    c.width = 320;
-                    c.height = 240;
-                    localBroadcastCanvasRef.current = c;
-                }
-                const canvas = localBroadcastCanvasRef.current;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(videoElem, 0, 0, 320, 240);
-                    const frameData = canvas.toDataURL('image/jpeg', 0.45);
-                    if (frameData && socketRef.current) {
-                        socketRef.current.emit('video-frame', {
-                            roomId,
-                            frameData,
-                            isVideoOn: true,
-                        });
+            // 1. Broadcast Camera Frames if Video is On
+            if (isVideoOn) {
+                try {
+                    let sourceCanvas = null;
+                    const videoElem = localVideoRef.current;
+                    if (videoElem && videoElem.videoWidth > 0 && !videoElem.paused) {
+                        sourceCanvas = videoElem;
+                    } else if (activeVirtualCanvasRef.current) {
+                        sourceCanvas = activeVirtualCanvasRef.current;
                     }
+
+                    if (sourceCanvas) {
+                        if (!localBroadcastCanvasRef.current) {
+                            const c = document.createElement('canvas');
+                            c.width = 320;
+                            c.height = 240;
+                            localBroadcastCanvasRef.current = c;
+                        }
+                        const canvas = localBroadcastCanvasRef.current;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            ctx.drawImage(sourceCanvas, 0, 0, 320, 240);
+                            const frameData = canvas.toDataURL('image/jpeg', 0.5);
+                            if (frameData && socketRef.current) {
+                                socketRef.current.emit('video-frame', {
+                                    roomId,
+                                    frameData,
+                                    isVideoOn: true,
+                                });
+                            }
+                        }
+                    }
+                } catch (err) {
+                    // Ignore canvas capture notice
                 }
-            } catch (err) {
-                // Ignore canvas security errors
             }
-        }, 300);
+
+            // 2. Broadcast Screen Share Frames if Screen Sharing is Active
+            if (isScreenSharing) {
+                try {
+                    let screenSource = null;
+                    const screenVideo = screenVideoRef.current;
+                    if (screenVideo && screenVideo.videoWidth > 0 && !screenVideo.paused) {
+                        screenSource = screenVideo;
+                    } else if (activeVirtualScreenCanvasRef.current) {
+                        screenSource = activeVirtualScreenCanvasRef.current;
+                    }
+
+                    if (screenSource) {
+                        if (!localScreenBroadcastCanvasRef.current) {
+                            const sc = document.createElement('canvas');
+                            sc.width = 640;
+                            sc.height = 360;
+                            localScreenBroadcastCanvasRef.current = sc;
+                        }
+                        const scCanvas = localScreenBroadcastCanvasRef.current;
+                        const sctx = scCanvas.getContext('2d');
+                        if (sctx) {
+                            sctx.drawImage(screenSource, 0, 0, 640, 360);
+                            const screenFrameData = scCanvas.toDataURL('image/jpeg', 0.55);
+                            if (screenFrameData && socketRef.current) {
+                                socketRef.current.emit('screen-frame', {
+                                    roomId,
+                                    frameData: screenFrameData,
+                                    isScreenSharing: true,
+                                });
+                            }
+                        }
+                    }
+                } catch (sErr) {
+                    // Ignore screen capture notice
+                }
+            }
+        }, 150);
 
         return () => clearInterval(interval);
-    }, [hasJoined, isVideoOn, roomId]);
+    }, [hasJoined, isVideoOn, isScreenSharing, roomId]);
 
     // Execute Sandbox Code & Broadcast Result
     const handleRunCode = async () => {
@@ -2596,7 +2683,7 @@ const LiveInterviewRoom = () => {
                                 autoPlay
                             />
 
-                            {/* Always keep remote video element mounted & muted so WebRTC hardware stream decoders stay alive without autoplay block */}
+                            {/* Remote WebRTC video element: only shown when actively rendering decoded video frames */}
                             <video
                                 ref={(el) => {
                                     remoteVideoRef.current = el;
@@ -2605,34 +2692,41 @@ const LiveInterviewRoom = () => {
                                         if (remoteStreamRef.current && el.srcObject !== remoteStreamRef.current) {
                                             el.srcObject = remoteStreamRef.current;
                                         }
-                                        el.play().catch((err) => {
-                                            console.debug('Remote video play notice:', err);
-                                        });
+                                        el.play().catch(console.debug);
                                     }
                                 }}
                                 autoPlay
                                 playsInline
                                 muted
+                                onPlaying={() => {
+                                    if (remoteVideoRef.current && remoteVideoRef.current.videoWidth > 0) {
+                                        setIsWebRtcVideoRendering(true);
+                                    }
+                                }}
+                                onTimeUpdate={() => {
+                                    if (remoteVideoRef.current && remoteVideoRef.current.videoWidth > 0) {
+                                        setIsWebRtcVideoRendering(true);
+                                    }
+                                }}
                                 onLoadedMetadata={(e) => {
                                     e.target.muted = true;
                                     e.target.play().catch(console.debug);
+                                    if (e.target.videoWidth > 0) {
+                                        setIsWebRtcVideoRendering(true);
+                                    }
                                 }}
-                                onCanPlay={(e) => {
-                                    e.target.muted = true;
-                                    e.target.play().catch(console.debug);
-                                }}
-                                className={`w-full h-full object-cover ${(hasRemoteStream || hasFallbackFrame) && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
+                                className={`w-full h-full object-cover ${isWebRtcVideoRendering && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
                             />
 
-                            {/* Fallback real-time canvas if WebRTC peer connection is pending or blocked */}
+                            {/* Fallback real-time canvas: continuously rendered so camera never turns black */}
                             <canvas
                                 ref={remoteFallbackCanvasRef}
                                 width={320}
                                 height={240}
-                                className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${hasFallbackFrame && !hasRemoteStream && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
+                                className={`w-full h-full object-cover pointer-events-none ${hasFallbackFrame && !isWebRtcVideoRendering && remotePeerMediaState.isVideoOn && !remotePeerMediaState.isScreenSharing ? 'block' : 'hidden'}`}
                             />
 
-                            {(!hasRemoteStream && !hasFallbackFrame || !remotePeerMediaState.isVideoOn || remotePeerMediaState.isScreenSharing) && (
+                            {(!isWebRtcVideoRendering && !hasFallbackFrame || !remotePeerMediaState.isVideoOn || remotePeerMediaState.isScreenSharing) && (
                                 <div className="text-center p-4">
                                     <Avatar className="w-16 h-16 sm:w-20 sm:h-20 mx-auto border-2 border-indigo-500/50 mb-2 shadow-lg">
                                         <AvatarImage src={isRecruiter && remotePeerConnected ? candidate.profile?.profilePhoto : undefined} />
@@ -3510,8 +3604,20 @@ const LiveInterviewRoom = () => {
                                     autoPlay
                                     playsInline
                                     muted
-                                    className="w-full h-full object-contain rounded-xl shadow-2xl"
+                                    className={`w-full h-full object-contain rounded-xl shadow-2xl ${hasScreenFrame ? 'hidden' : 'block'}`}
                                 />
+                                <canvas
+                                    ref={workspaceScreenCanvasRef}
+                                    width={640}
+                                    height={360}
+                                    className={`w-full h-full object-contain rounded-xl shadow-2xl ${hasScreenFrame ? 'block' : 'hidden'}`}
+                                />
+                                {!hasScreenFrame && !remoteStreamRef.current && (
+                                    <div className="text-center p-6 text-slate-400 absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                        <MonitorUp className="w-12 h-12 mx-auto text-indigo-400 mb-2 animate-bounce" />
+                                        <p className="text-sm font-semibold">Broadcasting live presentation screen stream...</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

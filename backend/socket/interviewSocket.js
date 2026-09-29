@@ -208,6 +208,18 @@ export const setupInterviewSocket = (io) => {
             });
         });
 
+        // 8c. Real-time Screen Share Frame Relay
+        socket.on("screen-frame", ({ roomId, frameData, isScreenSharing }) => {
+            const currentRoomId = roomId || socket.data.roomId;
+            if (!currentRoomId || !frameData) return;
+            socket.to(currentRoomId).emit("peer-screen-frame", {
+                frameData,
+                senderSocketId: socket.id,
+                senderUserId: socket.data.userId,
+                isScreenSharing: isScreenSharing !== undefined ? isScreenSharing : true,
+            });
+        });
+
         // 9. Real-time In-Room Chat
         socket.on("chat-message", async ({ roomId, message }) => {
             const currentRoomId = roomId || socket.data.roomId;
